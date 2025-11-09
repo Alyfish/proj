@@ -1,0 +1,24 @@
+# General
+.DS_Store
+*.log
+*.tmp
+*.swp
+.env
+.env.*
+
+# Node / Vite
+node_modules/
+dist/
+
+# Project subfolders
+sidebar-os/node_modules/
+sidebar-os/dist/
+
+# Tauri build output
+sidebar-os/src-tauri/target/
+sidebar-os/src-tauri/target/**
+
+# Editors
+.idea/
+.vscode/
+*.iml

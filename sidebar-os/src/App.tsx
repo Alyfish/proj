@@ -81,6 +81,17 @@ export default function App() {
   const [showRecordingPopup, setShowRecordingPopup] = useState(false)
   const recordPopupTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Demo notification state (triggered by typing "prompt me")
+  type DemoNotification = {
+    title: string
+    message: string
+    imageSrc: string
+  }
+  const [showNotification, setShowNotification] = useState(false)
+  const [notificationExpanded, setNotificationExpanded] = useState(false)
+  const [notification, setNotification] = useState<DemoNotification | null>(null)
+  const [autoMode, setAutoMode] = useState(false)
+
   // Dashboard data types and helpers
   type TeamItem = { name: string; owner: string }
   const currentUser = 'You'
@@ -630,6 +641,17 @@ export default function App() {
     
     // Add user message
     setMessages(prev => [...prev, { role: 'user', content: input }])
+
+    // Demo trigger: if user types "prompt me", show action notification
+    if (input.trim().toLowerCase().includes('prompt me')) {
+      setNotification({
+        title: 'Action requested',
+        message: 'Open the Project Brief and extract key tasks to your tracker. Review the suggested steps and confirm.',
+        imageSrc: '/vite.svg',
+      })
+      setNotificationExpanded(false)
+      setShowNotification(true)
+    }
     
     // Simulate assistant response
     setTimeout(() => {
@@ -883,6 +905,69 @@ export default function App() {
   // Expanded full chat UI
   return (
     <div className="flex flex-col h-screen bg-transparent text-[#ececec] transition-all duration-300">
+      {/* Demo Action Notification */}
+      {showNotification && notification && (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 w-[min(560px,95vw)]" data-drag="block">
+          <div className="bg-[#111111]/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
+            <div className="flex items-start gap-3 p-4">
+              <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#5436da] to-[#19c37d] flex items-center justify-center text-xs font-bold">Δ</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">{notification.title}</div>
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+                    onClick={() => setNotificationExpanded(v => !v)}
+                  >
+                    {notificationExpanded ? 'Collapse' : 'Expand'}
+                  </button>
+                </div>
+                <div className="mt-1 text-sm text-[#dcdcdc]">{notification.message}</div>
+                {notificationExpanded && (
+                  <div className="mt-3 flex items-start gap-3">
+                    <img src={notification.imageSrc} alt="Action preview" className="w-20 h-20 rounded-lg border border-white/10 bg-white/5" />
+                    <div className="text-xs text-[#bcbcbc] leading-relaxed">
+                      This action will gather context from your current project files and generate a checklist. You can accept to run once, select auto to let the assistant perform similar actions, or cancel.
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    className="px-3 py-1.5 rounded-md bg-[#19c37d]/90 hover:bg-[#19c37d] text-black text-sm"
+                    onClick={() => {
+                      setShowNotification(false)
+                      setNotificationExpanded(false)
+                      setMessages(prev => [...prev, { role: 'assistant', content: 'Action accepted. Running the suggested steps…' }])
+                    }}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                    onClick={() => {
+                      setAutoMode(true)
+                      setShowNotification(false)
+                      setNotificationExpanded(false)
+                      setMessages(prev => [...prev, { role: 'assistant', content: 'Auto mode enabled for similar actions. You can turn this off later.' }])
+                    }}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                    onClick={() => {
+                      setShowNotification(false)
+                      setNotificationExpanded(false)
+                      setMessages(prev => [...prev, { role: 'assistant', content: 'Canceled the action.' }])
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Dashboard overlay */}
       {showDashboard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-6">

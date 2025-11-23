@@ -1,0 +1,8 @@
+{
+    "name": "@email-assistant/sidebar-integration",
+    "version": "0.1.0",
+    "main": "src/index.ts",
+    "dependencies": {
+        "@email-assistant/common": "*"
+    }
+}

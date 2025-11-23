@@ -1,0 +1,11 @@
+{
+    "name": "@email-assistant/agent-gmail",
+    "version": "0.1.0",
+    "main": "index.ts",
+    "dependencies": {
+        "@email-assistant/common": "*",
+        "googleapis": "^126.0.0",
+        "google-auth-library": "^9.0.0",
+        "dotenv": "^16.0.0"
+    }
+}

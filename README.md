@@ -49,6 +49,11 @@ npm run tauri:build
   - A top‑center notification appears with an Expand button and image
   - Actions: Accept (run once), Auto (enable auto mode), Cancel
 
+- Simple Voice Agent (chained)
+  - Click the mic button in the input bar to record
+  - Pipeline: gpt-4o-transcribe → gpt-4.1 → gpt-4o-mini-tts
+  - Plays the synthesized response and drops transcript/response into chat
+
 - Dashboard
   - Project‑first layout: sidebar of Projects, details panel per project
   - Your Context and Your Subagents: edit/delete items per project
@@ -71,6 +76,16 @@ npm run tauri:build
 - Notification demo image: update `imageSrc` in `sidebar-os/src/App.tsx` (search for `prompt me` trigger)
 - Colors/spacing: Tailwind utilities in JSX + `sidebar-os/src/index.css`
 - Keyboard behavior and position saving use Tauri APIs (only active in desktop build)
+
+### Environment (OpenAI)
+
+Create `sidebar-os/.env.local` and add your API key:
+
+```
+VITE_OPENAI_API_KEY=sk-xxxxx
+```
+
+The voice agent uses browser `fetch` to call OpenAI for transcription, chat completion, and TTS. For production, consider proxying calls via a server or the Tauri backend to avoid exposing your key to the renderer.
 
 ## License
 

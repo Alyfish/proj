@@ -1,0 +1,19 @@
+{
+    "name": "@email-assistant/orchestrator",
+    "version": "0.1.0",
+    "main": "index.ts",
+    "dependencies": {
+        "@email-assistant/common": "*",
+        "@email-assistant/sidebar-integration": "*",
+        "@types/uuid": "^10.0.0",
+        "uuid": "^13.0.0",
+        "express": "^4.18.2",
+        "cors": "^2.8.5",
+        "@types/express": "^4.17.21",
+        "@types/cors": "^2.8.17"
+    },
+    "scripts": {
+        "start": "ts-node src/index.ts",
+        "start:server": "ts-node src/server.ts"
+    }
+}

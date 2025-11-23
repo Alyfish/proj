@@ -1,0 +1,101 @@
+# User Interaction Agent - Design
+
+## Purpose
+A dedicated agent that **proactively engages with the user** to:
+1. Understand their current goals and priorities
+2. Clarify ambiguous situations
+3. Gather context about their work
+4. Validate inferred goals from behavior patterns
+
+## Agent Interface
+
+```typescript
+interface UserInteractionInput {
+  userId: string;
+  inferredGoals?: UserGoal[]; // Goals detected from behavior
+  ambiguousEmails?: EmailMetadata[]; // Emails that need clarification
+  conversationContext?: ConversationHistory;
+}
+
+interface UserInteractionOutput {
+  confirmedGoals: UserGoal[];
+  newGoals: UserGoal[];
+  userResponses: Map<string, string>; // question -> answer
+  clarifications: EmailClarification[];
+}
+
+class UserInteractionAgent implements Agent<UserInteractionInput, UserInteractionOutput> {
+  name = 'UserInteractionAgent';
+  
+  async run(input: UserInteractionInput): Promise<UserInteractionOutput> {
+    // 1. Generate questions based on context
+    const questions = await this.generateQuestions(input);
+    
+    // 2. Present to user (via CLI, UI, or chat)
+    const responses = await this.askUser(questions);
+    
+    // 3. Parse and validate responses
+    const parsed = await this.parseResponses(responses);
+    
+    // 4. Update goal database
+    await this.updateGoals(parsed);
+    
+    return parsed;
+  }
+}
+```
+
+## Interaction Scenarios
+
+### Scenario 1: Initial Onboarding
+**When**: First time user runs the system
+
+```
+👋 Welcome to your Email Assistant!
+
+To help me prioritize your emails, I'd like to understand what you're working on.
+
+What are your top 3 priorities right now?
+1. _______________
+2. _______________
+3. _______________
+```
+
+### Scenario 2: Goal Confirmation
+**When**: System infers goals from behavior with medium confidence
+
+```
+🤔 I noticed you've been focusing on these areas:
+
+1. ✅ Q4 Financial Report (high confidence)
+   - You've opened 5 related emails in the past 2 days
+   
+2. ⚠️ Hiring Senior Engineer (medium confidence)
+   - 3 emails from recruiter@company.com
+
+Are these accurate?
+[✓ Yes] [Update] [+ Add Goal]
+```
+
+### Scenario 3: Weekly Check-in
+**When**: Every Monday morning
+
+```
+📅 Weekly Check-in
+
+Last week you worked on:
+✓ Q4 Financial Report (5 emails, 2 tasks completed)
+✓ Hiring Senior Engineer (3 emails, 1 interview)
+
+Still focused on these? [Yes] [Update]
+```
+
+## Integration Point
+
+The User Interaction Agent runs **between Context Analysis and Prioritization**:
+
+```
+Retrieval → Context → USER INTERACTION → Prioritization → Analysis → Suggestion
+```
+
+This ensures the system has the latest user goals before prioritizing emails.

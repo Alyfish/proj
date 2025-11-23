@@ -22,3 +22,8 @@ sidebar-os/src-tauri/target/**
 .idea/
 .vscode/
 *.iml
+
+# Gmail secrets
+email-assistant/agents/gmail/credentials.json
+email-assistant/agents/gmail/token.json
+client_secret_*.json

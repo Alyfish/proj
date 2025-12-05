@@ -5,6 +5,11 @@ import { LogicalSize, PhysicalPosition } from '@tauri-apps/api/dpi'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { codex } from './codex'
+import { VoiceRecorder, runVoicePipeline, playAudio, synthesize } from './voiceAgent'
+import { emailAssistant } from './emailAssistant'
+
+// Default user for email assistant; override via VITE_EMAIL_ASSISTANT_USER_ID to match seeded backend user.
+const EMAIL_ASSISTANT_USER_ID = import.meta.env.VITE_EMAIL_ASSISTANT_USER_ID || 'test-user-id'
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug' | 'trace'
 
@@ -43,13 +48,46 @@ const logError = (...args: unknown[]) => {
   emitLog('error', args)
 }
 
+// Simple matcher to detect email-assistant intents in text prompts
+const isEmailAssistantCommand = (text: string) => {
+  const normalized = text.toLowerCase()
+  const triggers = [
+    'process emails',
+    'check emails',
+    'email assistant',
+    'process my emails',
+    'scan my emails',
+    'go through my emails'
+  ]
+  // Heuristics: if the user asks to find/summarize emails about a topic or from a sender, treat it as an email task
+  const emailIntent = normalized.includes('email') || normalized.includes('emai') // tolerate minor typos
+  const actionIntent = ['process', 'check', 'scan', 'go through', 'find', 'look for', 'summarize', 'list'].some(kw => normalized.includes(kw))
+  const aboutIntent = ['about', 'regarding', 'investment', 'opportunity', 'from'].some(kw => normalized.includes(kw))
+  return triggers.some(cmd => normalized.includes(cmd)) ||
+    (emailIntent && (actionIntent || aboutIntent))
+}
+
 type WindowMode = 'collapsed' | 'hovered' | 'expanded' | 'sidepanel'
 
 export default function App() {
   const [input, setInput] = useState('')
-  const [messages, setMessages] = useState<Array<{role: 'user'|'assistant', content: string}>>([])
+  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([])
   const [windowMode, setWindowMode] = useState<WindowMode>('expanded')
   const [sidePanelSide, setSidePanelSide] = useState<'right' | 'left'>('right')
+  const [emailResult, setEmailResult] = useState<{
+    recentEmails?: Array<{ id: string; subject: string; snippet: string; sender: string; receivedAt: string; priority?: string }>
+    analyses?: Array<{ emailId: string; summary: string; actionItems: string[]; deadline?: string; entities: string[] }>
+    suggestions?: Array<{ type: 'task' | 'reply' | 'info'; title: string; details: string; sourceEmailId?: string; priority: 'high' | 'medium' | 'low' }>
+    intent?: string
+    query?: string
+    activeGoals?: Array<{ id?: number; goalText: string; confidence: number }>
+    emailGoalRelevance?: Record<string, number[]>
+  } | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [showEmailPanel, setShowEmailPanel] = useState<boolean>(true)
+  const clearEmailPanel = () => {
+    setShowEmailPanel(false)
+  }
 
   // Projects menu state
   type Project = { name: string; createdAt: string; updatedAt: string }
@@ -131,9 +169,19 @@ export default function App() {
   // Position tracking for custom repositioning
   const [useCustomPosition, setUseCustomPosition] = useState(false)
   const [hasCustomPosition, setHasCustomPosition] = useState(false)
+  const [expandedEmails, setExpandedEmails] = useState<Record<string, boolean>>({})
 
   // Codex state
   const [codexReady, setCodexReady] = useState(false)
+
+  // Voice agent state
+  const [voiceRecording, setVoiceRecording] = useState(false)
+  const [voiceBusy, setVoiceBusy] = useState(false)
+  const [lastTranscript, setLastTranscript] = useState<string>('')
+  const [lastResponse, setLastResponse] = useState<string>('')
+  const [hasGreetedVoice, setHasGreetedVoice] = useState<boolean>(false)
+  const recorderRef = useRef<VoiceRecorder | null>(null)
+  const lastAudioRef = useRef<HTMLAudioElement | null>(null)
 
   // Use ref to track current windowMode without causing re-renders
   const windowModeRef = useRef<WindowMode>(windowMode)
@@ -636,14 +684,97 @@ export default function App() {
     }
   }, [windowMode, sidePanelSide])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return
-    
+
+    const userInput = input.trim();
+
     // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: input }])
+    setMessages(prev => [...prev, { role: 'user', content: userInput }])
+    setInput('');
+
+    // Check for email assistant commands
+    const isEmailCommand = isEmailAssistantCommand(userInput);
+
+    if (isEmailCommand) {
+      // Show loading message
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '🔄 Processing your emails... This may take a moment.'
+      }]);
+
+      try {
+        setEmailError(null)
+        // Quick health check so we can fail fast with a helpful message
+        const healthy = await emailAssistant.healthCheck()
+        if (!healthy) {
+          setEmailError('Email assistant API is unreachable. Start it with "cd email-assistant/orchestrator && npm run start:server".')
+          setMessages(prev => prev.slice(0, -1).concat([{
+            role: 'assistant',
+            content: '❌ Email assistant API is unreachable.\n\nStart it with:\ncd email-assistant/orchestrator && npm run start:server'
+          }]))
+          return
+        }
+
+        // Call email assistant API
+        // Using a default user ID from env; backend expects this user to be seeded.
+        const result = await emailAssistant.processEmails(EMAIL_ASSISTANT_USER_ID, userInput);
+
+        if (result.success && result.textOutput) {
+          const quickStatus = result.quickStatus ? `\n\n${result.quickStatus}` : ''
+          // Display the formatted text output
+          const hasData = (result.data?.recentEmails?.length ?? 0) > 0 || (result.data?.suggestions?.length ?? 0) > 0;
+
+          let chatMessage = result.textOutput;
+          if (hasData) {
+            const emailCount = result.data?.recentEmails?.length ?? 0;
+            const suggestionCount = result.data?.suggestions?.length ?? 0;
+            chatMessage = `Found ${emailCount} relevant emails and generated ${suggestionCount} suggestions.\n\nCheck the **Email Insights** panel for details.`;
+          }
+
+          setMessages(prev => prev.slice(0, -1).concat([{
+            role: 'assistant',
+            content: `${chatMessage}${quickStatus}`
+          }]));
+
+
+          if (hasData) {
+            setEmailError(null)
+            setEmailResult({
+              recentEmails: result.data?.recentEmails,
+              analyses: result.data?.analyses,
+              suggestions: result.data?.suggestions,
+              intent: result.data?.intent,
+              query: result.data?.query,
+              activeGoals: result.data?.activeGoals,
+              emailGoalRelevance: result.data?.emailGoalRelevance
+            })
+            setShowEmailPanel(true)
+          } else {
+            setEmailError('No matching emails or suggestions were returned for this query.')
+            setEmailResult(null)
+          }
+        } else {
+          // Show error message
+          setEmailError(result.message || result.error || 'Failed to process emails')
+          setMessages(prev => prev.slice(0, -1).concat([{
+            role: 'assistant',
+            content: `❌ Failed to process emails: ${result.error || 'Unknown error'}\n\nMake sure the email assistant server is running:\ncd email-assistant/orchestrator && npm run start:server`
+          }]));
+        }
+      } catch (error) {
+        console.error('Email processing error:', error);
+        setEmailError(error instanceof Error ? error.message : 'Failed to connect to email assistant')
+        setMessages(prev => prev.slice(0, -1).concat([{
+          role: 'assistant',
+          content: `❌ Error: ${error instanceof Error ? error.message : 'Failed to connect to email assistant'}\n\nMake sure the server is running on http://localhost:3001 and that VITE_EMAIL_ASSISTANT_USER_ID matches a seeded user.`
+        }]));
+      }
+      return;
+    }
 
     // Demo trigger: if user types "prompt me", show action notification
-    if (input.trim().toLowerCase().includes('prompt me')) {
+    if (userInput.toLowerCase().includes('prompt me')) {
       setNotification({
         title: 'Action requested',
         message: 'Open the Project Brief and extract key tasks to your tracker. Review the suggested steps and confirm.',
@@ -652,21 +783,82 @@ export default function App() {
       setNotificationExpanded(false)
       setShowNotification(true)
     }
-    
-    // Simulate assistant response
+
+    // Simulate assistant response for other commands
     setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'This is a placeholder response. Connect to an LLM API to get real responses.' 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'This is a placeholder response. Connect to an LLM API to get real responses.\n\nTip: Try "process emails" to run the email assistant!'
       }])
     }, 500)
-    
-    setInput('')
+  }
+
+  // Voice agent controls
+  const startVoice = async () => {
+    if (voiceRecording || voiceBusy) return
+    try {
+      recorderRef.current = new VoiceRecorder()
+      await recorderRef.current.start()
+      setVoiceRecording(true)
+    } catch (e: any) {
+      logError('Mic start failed', e)
+      const msg = e?.message || e?.name || String(e)
+      alert('Microphone permission failed: ' + msg + '\nOn macOS, grant mic access in System Settings → Privacy & Security → Microphone.')
+    }
+  }
+
+  const stopVoice = async () => {
+    if (!voiceRecording || !recorderRef.current) return
+    setVoiceRecording(false)
+    setVoiceBusy(true)
+    try {
+      const blob = await recorderRef.current.stop()
+      // First interaction: greet with a fixed line
+      if (!hasGreetedVoice) {
+        const greeting = 'sentext at your service! how can I help?'
+        setHasGreetedVoice(true)
+        setLastTranscript('(first voice interaction)')
+        setLastResponse(greeting)
+        let url: string | null = null
+        try {
+          url = await synthesize(greeting)
+        } catch (ge) {
+          logError('Greeting TTS failed', ge)
+        }
+        if (url) {
+          const audio = new Audio(url)
+          lastAudioRef.current?.pause()
+          lastAudioRef.current = audio
+          void audio.play()
+        }
+        setMessages(prev => [
+          ...prev,
+          { role: 'user', content: '(voice) ' + (new Date().toLocaleTimeString()) },
+          { role: 'assistant', content: greeting }
+        ])
+      } else {
+        const { transcript, responseText, audioUrl } = await runVoicePipeline(blob)
+        setLastTranscript(transcript)
+        setLastResponse(responseText)
+        // Play
+        const audio = new Audio(audioUrl)
+        lastAudioRef.current?.pause()
+        lastAudioRef.current = audio
+        void audio.play()
+        // Also drop messages in chat
+        setMessages(prev => [...prev, { role: 'user', content: `(voice) ${transcript}` }, { role: 'assistant', content: responseText }])
+      }
+    } catch (e) {
+      logError('Voice pipeline error', e)
+      alert('Voice pipeline failed: ' + (e as Error).message)
+    } finally {
+      setVoiceBusy(false)
+    }
   }
 
   // Debug: Always show current state
   logInfo('🔍 CURRENT RENDER - windowMode:', windowMode)
-  
+
   // Collapsed pill UI - compact and minimal
   if (windowMode === 'collapsed') {
     logInfo('🎯 RENDERING COLLAPSED PILL UI')
@@ -848,8 +1040,8 @@ export default function App() {
               <div className="bg-[#282828]/50 backdrop-blur-xl rounded-[20px] border border-white/10 shadow-xl flex items-center gap-2 px-3 py-2.5" data-drag="block">
                 <button className="p-1.5 hover:bg-[#3a3a3a] rounded-md transition-colors text-[#ececec]" aria-label="Add">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                 </button>
                 <input
@@ -905,145 +1097,295 @@ export default function App() {
   // Expanded full chat UI
   return (
     <div className="flex flex-col h-screen bg-transparent text-[#ececec] transition-all duration-300">
-      {/* Demo Action Notification */}
-      {showNotification && notification && (
-        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 w-[min(560px,95vw)]" data-drag="block">
-          <div className="bg-[#111111]/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
-            <div className="flex items-start gap-3 p-4">
-              <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#5436da] to-[#19c37d] flex items-center justify-center text-xs font-bold">Δ</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold">{notification.title}</div>
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                    onClick={() => setNotificationExpanded(v => !v)}
-                  >
-                    {notificationExpanded ? 'Collapse' : 'Expand'}
-                  </button>
-                </div>
-                <div className="mt-1 text-sm text-[#dcdcdc]">{notification.message}</div>
-                {notificationExpanded && (
-                  <div className="mt-3 flex items-start gap-3">
-                    <img src={notification.imageSrc} alt="Action preview" className="w-20 h-20 rounded-lg border border-white/10 bg-white/5" />
-                    <div className="text-xs text-[#bcbcbc] leading-relaxed">
-                      This action will gather context from your current project files and generate a checklist. You can accept to run once, select auto to let the assistant perform similar actions, or cancel.
-                    </div>
-                  </div>
+      {/* Email insights panel (shows when email assistant returns structured data) */}
+      {emailResult && (
+        <div className="p-4">
+          <div className="max-w-5xl mx-auto bg-gradient-to-br from-[#0f1117]/90 via-[#0d0f14]/85 to-[#0b0d11]/90 border border-white/10 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] overflow-hidden backdrop-blur-xl">
+            <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-white/10">
+              <div className="min-w-0">
+                <div className="text-[11px] text-[#8bd4ff] uppercase tracking-[0.18em]">Email Insights</div>
+                <div className="text-xl font-semibold leading-tight break-words">{emailResult.query || 'Latest inbox insights'}</div>
+                {emailResult.intent && (
+                  <div className="text-xs text-[#9b9b9b] mt-1">Intent: {emailResult.intent}</div>
                 )}
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    className="px-3 py-1.5 rounded-md bg-[#19c37d]/90 hover:bg-[#19c37d] text-black text-sm"
-                    onClick={() => {
-                      setShowNotification(false)
-                      setNotificationExpanded(false)
-                      setMessages(prev => [...prev, { role: 'assistant', content: 'Action accepted. Running the suggested steps…' }])
-                    }}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
-                    onClick={() => {
-                      setAutoMode(true)
-                      setShowNotification(false)
-                      setNotificationExpanded(false)
-                      setMessages(prev => [...prev, { role: 'assistant', content: 'Auto mode enabled for similar actions. You can turn this off later.' }])
-                    }}
-                  >
-                    Auto
-                  </button>
-                  <button
-                    className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
-                    onClick={() => {
-                      setShowNotification(false)
-                      setNotificationExpanded(false)
-                      setMessages(prev => [...prev, { role: 'assistant', content: 'Canceled the action.' }])
-                    }}
-                  >
-                    Cancel
-                  </button>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] bg-white/10 text-[#dfe9ff] border border-white/10">
+                    {emailResult.recentEmails?.length ?? 0} emails
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] bg-emerald-500/10 text-emerald-200 border border-emerald-500/20">
+                    {emailResult.suggestions?.length ?? 0} suggestions
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  className={`px-3 py-1 rounded-full text-xs border ${showEmailPanel ? 'bg-white/15 border-white/20' : 'bg-transparent border-white/10 hover:bg-white/5'}`}
+                  onClick={() => setShowEmailPanel(true)}
+                >
+                  Cards
+                </button>
+                <button
+                  className={`px-3 py-1 rounded-full text-xs border ${!showEmailPanel ? 'bg-white/15 border-white/20' : 'bg-transparent border-white/10 hover:bg-white/5'}`}
+                  onClick={() => setShowEmailPanel(false)}
+                >
+                  Text
+                </button>
+                <button
+                  className="px-3 py-1 rounded-full text-xs border border-white/10 bg-white/5 hover:bg-white/15 transition"
+                  onClick={() => {
+                    setEmailResult(null)
+                    setExpandedEmails({})
+                  }}
+                  aria-label="Close insights"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            {emailError && (
+              <div className="mx-4 mt-3 mb-1 text-sm text-red-200 bg-red-500/15 border border-red-500/30 rounded-lg p-2.5">
+                {emailError}
+              </div>
+            )}
+
+            {/* Active Goals Section */}
+            {showEmailPanel && emailResult.activeGoals && emailResult.activeGoals.length > 0 && (
+              <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+                <div className="text-[11px] text-[#8bd4ff] uppercase tracking-[0.18em] mb-2">Active Context</div>
+                <div className="flex flex-wrap gap-2">
+                  {emailResult.activeGoals.map((goal, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/10 text-xs text-[#e0e0e0]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                      <span className="font-medium">{goal.goalText}</span>
+                      <span className="text-[#9ca3af] text-[10px]">{Math.round(goal.confidence * 100)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {showEmailPanel ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+                {/* Recent emails */}
+                <div className="bg-white/5 rounded-xl border border-white/5 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">Relevant Emails</div>
+                    <div className="text-xs text-[#9b9b9b]">{emailResult.recentEmails?.length || 0} shown</div>
+                  </div>
+                  <div className="space-y-2">
+                    {(emailResult.recentEmails || []).map((email) => {
+                      const isOpen = !!expandedEmails[email.id];
+                      const travelAnalysis = (emailResult.analyses || []).find(a => a.emailId === email.id && (a as any).travelDetails);
+                      const travelTag = travelAnalysis ? '✈️' : '';
+                      const priorityColor = email.priority === 'high' ? 'bg-red-500/20 text-red-300' : email.priority === 'medium' ? 'bg-amber-500/20 text-amber-200' : 'bg-emerald-500/20 text-emerald-200';
+                      return (
+                        <div key={email.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-[#131722]/85 via-[#10141d]/85 to-[#0b0f17]/85 p-3 shadow-[0_14px_36px_rgba(0,0,0,0.4)]">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold truncate flex items-center gap-2">
+                                <span className="inline-flex w-6 h-6 items-center justify-center rounded-full bg-white/10 text-[11px] text-white/80">{travelTag || '✉️'}</span>
+                                <span className="truncate">{email.subject || '(No subject)'}</span>
+                              </div>
+                              <div className="text-xs text-[#c0c0c0] truncate">{email.sender}</div>
+                              <div className="text-[11px] text-[#9b9b9b]">{new Date(email.receivedAt).toLocaleString()}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {/* Context Tag */}
+                              {emailResult.emailGoalRelevance?.[email.id] && emailResult.emailGoalRelevance[email.id].length > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 flex items-center gap-1">
+                                  <span>🎯</span>
+                                  <span>Context</span>
+                                </span>
+                              )}
+                              <span className={`px-2.5 py-1 rounded-full text-[11px] border border-white/10 ${priorityColor}`}>
+                                {email.priority || 'low'}
+                              </span>
+                              <button
+                                className="text-xs px-2.5 py-1 rounded-full border border-white/10 bg-white/5 hover:bg-white/15 transition"
+                                onClick={() => setExpandedEmails(prev => ({ ...prev, [email.id]: !isOpen }))}
+                              >
+                                {isOpen ? 'Hide' : 'Expand'}
+                              </button>
+                            </div>
+                          </div>
+                          {isOpen && (
+                            <div className="mt-3 space-y-2 text-sm text-[#e8e8e8] leading-relaxed">
+                              <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-xs text-[#d6d6d6]">
+                                {email.snippet || 'No snippet available.'}
+                              </div>
+                              {/* Link to analyses or suggestions for this email */}
+                              <div className="space-y-2">
+                                {(emailResult.analyses || []).filter(a => a.emailId === email.id).map(a => (
+                                  <div key={a.emailId} className="rounded-lg border border-white/10 bg-white/5 p-2.5 text-xs text-[#dcdcdc]">
+                                    <div className="font-semibold text-[#f8f8f8] flex items-center gap-2">
+                                      <span className="inline-block w-2 h-2 rounded-full bg-sky-400" />
+                                      Analysis
+                                    </div>
+                                    <div className="mt-1">{a.summary}</div>
+                                    {a.actionItems?.length > 0 && (
+                                      <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                        {a.actionItems.map((item, idx) => <li key={idx}>{item}</li>)}
+                                      </ul>
+                                    )}
+                                  </div>
+                                ))}
+                                {(emailResult.suggestions || []).filter(s => s.sourceEmailId === email.id).map((s, idx) => (
+                                  <div key={`${email.id}-s-${idx}`} className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-2.5 text-xs text-[#c5f2d9]">
+                                    <div className="font-semibold text-[#9ef0b5] flex items-center gap-2">
+                                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
+                                      {s.type === 'reply' ? 'Suggested reply' : 'Next step'}
+                                    </div>
+                                    <div className="mt-1">{s.details || s.title}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {(emailResult.recentEmails || []).length === 0 && (
+                      <div className="text-xs text-[#9b9b9b]">No emails matched this query.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Suggestions / Next steps */}
+                <div className="bg-white/5 rounded-xl border border-white/5 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">Next Steps & Suggestions</div>
+                    <div className="text-xs text-[#9b9b9b]">{emailResult.suggestions?.length || 0} items</div>
+                  </div>
+                  <div className="space-y-2">
+                    {(emailResult.suggestions || []).map((s, idx) => (
+                      <div key={idx} className="rounded-xl border border-white/10 bg-gradient-to-br from-[#121722]/85 to-[#0f131c]/85 p-3 shadow-[0_14px_36px_rgba(0,0,0,0.35)]">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold">{s.title}</div>
+                          <span className={`px-2.5 py-1 rounded-full text-[11px] border border-white/10 ${s.priority === 'high' ? 'bg-red-500/20 text-red-200' : s.priority === 'medium' ? 'bg-amber-500/20 text-amber-200' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                            {s.type === 'reply' ? 'Reply' : s.priority}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-sm text-[#dcdcdc] leading-relaxed">{s.details}</div>
+                      </div>
+                    ))}
+                    {(emailResult.suggestions || []).length === 0 && (
+                      <div className="text-xs text-[#9b9b9b]">No suggested actions. Try refining your query.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 text-sm text-[#e8e8e8] whitespace-pre-wrap">
+                {/* Text fallback: show the last assistant message (already contains the text report) */}
+                {messages.filter(m => m.role === 'assistant').slice(-1)[0]?.content || 'No report available.'}
+              </div>
+            )}
+          </div>
+        </div >
+      )
+      }
+      {/* Demo Action Notification */}
+      {
+        showNotification && notification && (
+          <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50 w-[min(560px,95vw)]" data-drag="block">
+            <div className="bg-[#111111]/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
+              <div className="flex items-start gap-3 p-4">
+                <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#5436da] to-[#19c37d] flex items-center justify-center text-xs font-bold">Δ</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">{notification.title}</div>
+                    <button
+                      className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+                      onClick={() => setNotificationExpanded(v => !v)}
+                    >
+                      {notificationExpanded ? 'Collapse' : 'Expand'}
+                    </button>
+                  </div>
+                  <div className="mt-1 text-sm text-[#dcdcdc]">{notification.message}</div>
+                  {notificationExpanded && (
+                    <div className="mt-3 flex items-start gap-3">
+                      <img src={notification.imageSrc} alt="Action preview" className="w-20 h-20 rounded-lg border border-white/10 bg-white/5" />
+                      <div className="text-xs text-[#bcbcbc] leading-relaxed">
+                        This action will gather context from your current project files and generate a checklist. You can accept to run once, select auto to let the assistant perform similar actions, or cancel.
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      className="px-3 py-1.5 rounded-md bg-[#19c37d]/90 hover:bg-[#19c37d] text-black text-sm"
+                      onClick={() => {
+                        setShowNotification(false)
+                        setNotificationExpanded(false)
+                        setMessages(prev => [...prev, { role: 'assistant', content: 'Action accepted. Running the suggested steps…' }])
+                      }}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                      onClick={() => {
+                        setAutoMode(true)
+                        setShowNotification(false)
+                        setNotificationExpanded(false)
+                        setMessages(prev => [...prev, { role: 'assistant', content: 'Auto mode enabled for similar actions. You can turn this off later.' }])
+                      }}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                      onClick={() => {
+                        setShowNotification(false)
+                        setNotificationExpanded(false)
+                        setMessages(prev => [...prev, { role: 'assistant', content: 'Canceled the action.' }])
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
       {/* Dashboard overlay */}
-      {showDashboard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-6">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowDashboard(false)} />
-          <div
-            ref={dashboardRef}
-            className="relative z-10 w-[1400px] max-w-[99vw] max-h-[95vh] bg-[#1b1b1b]/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-auto"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 sticky top-0 bg-[#1b1b1b]/80 backdrop-blur-xl">
-              <div className="flex items-center gap-3">
-                <button
-                  className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
-                  onClick={() => setShowDashboard(false)}
-                >
-                  ← Back to Chat
-                </button>
-                <div className="text-lg font-semibold">Dashboard</div>
-              </div>
-              <button className="p-2 rounded-lg hover:bg-white/10" onClick={() => setShowDashboard(false)} aria-label="Close dashboard">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            {/* Project-centric layout */}
-            <div className="flex">
-              {/* Projects sidebar (hidden when a project is selected) */}
-              {!dashboardSelectedProject && (
-              <aside className="w-80 shrink-0 border-r border-white/10 bg-white/5">
-                <div className="p-4 flex items-center justify-between">
-                  <div className="text-sm font-semibold flex items-center gap-2">
-                    <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">📁</span>
-                    Projects
-                  </div>
+      {
+        showDashboard && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-6">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowDashboard(false)} />
+            <div
+              ref={dashboardRef}
+              className="relative z-10 w-[1400px] max-w-[99vw] max-h-[95vh] bg-[#1b1b1b]/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-3 border-b border-white/10 sticky top-0 bg-[#1b1b1b]/80 backdrop-blur-xl">
+                <div className="flex items-center gap-3">
                   <button
-                    className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
-                    onClick={() => {
-                      const nextName = `New Project ${projects.length + 1}`
-                      const now = new Date().toISOString()
-                      setProjects(prev => [...prev, { name: nextName, createdAt: now, updatedAt: now }])
-                      setSelectedProject(nextName)
-                      setDashboardSelectedProject(nextName)
-                    }}
+                    className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                    onClick={() => setShowDashboard(false)}
                   >
-                    New
+                    ← Back to Chat
                   </button>
+                  <div className="text-lg font-semibold">Dashboard</div>
                 </div>
-                <div className="px-3 pb-3">
-                  <div className="space-y-1">
-                    {projects.map((p) => (
+                <button className="p-2 rounded-lg hover:bg-white/10" onClick={() => setShowDashboard(false)} aria-label="Close dashboard">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                </button>
+              </div>
+              {/* Project-centric layout */}
+              <div className="flex">
+                {/* Projects sidebar (hidden when a project is selected) */}
+                {!dashboardSelectedProject && (
+                  <aside className="w-80 shrink-0 border-r border-white/10 bg-white/5">
+                    <div className="p-4 flex items-center justify-between">
+                      <div className="text-sm font-semibold flex items-center gap-2">
+                        <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">📁</span>
+                        Projects
+                      </div>
                       <button
-                        key={p.name}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${p.name === dashboardSelectedProject ? 'bg-white/15' : 'bg-white/5 hover:bg-white/10'} text-[#ececec]`}
-                        onClick={() => {
-                          setDashboardSelectedProject(p.name)
-                          setSelectedProject(p.name)
-                        }}
-                      >
-                        <div className="font-medium truncate">{p.name}</div>
-                        <div className="text-xs text-[#bdbdbd] mt-0.5 truncate">Updated {new Date(p.updatedAt).toLocaleDateString()}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </aside>
-              )}
-
-              {/* Details panel */}
-              <main className="flex-1 p-5 space-y-4 overflow-auto">
-                {!dashboardSelectedProject ? (
-                  <div className="h-full min-h-[60vh] flex items-center justify-center">
-                    <div className="text-center max-w-lg">
-                      <div className="inline-flex w-12 h-12 items-center justify-center rounded-xl bg-white/10 mb-4">📁</div>
-                      <h2 className="text-2xl font-semibold mb-2">Projects</h2>
-                      <p className="text-[#cfcfcf]/80 mb-4">Select a project to view its AI History, Your Context, and Your Subagents.</p>
-                      <button
-                        className="px-3 py-2 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                        className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
                         onClick={() => {
                           const nextName = `New Project ${projects.length + 1}`
                           const now = new Date().toISOString()
@@ -1052,277 +1394,319 @@ export default function App() {
                           setDashboardSelectedProject(nextName)
                         }}
                       >
-                        Create New Project
+                        New
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-5">
-                    {/* Project header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <button
-                          className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
-                          onClick={() => setDashboardSelectedProject(null)}
-                        >
-                          ← Back to Projects
-                        </button>
-                        <div>
-                          <div className="text-sm text-[#bdbdbd]">Project</div>
-                          <div className="text-xl font-semibold">{dashboardSelectedProject}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm">Share</button>
-                        <button className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm">Settings</button>
+                    <div className="px-3 pb-3">
+                      <div className="space-y-1">
+                        {projects.map((p) => (
+                          <button
+                            key={p.name}
+                            className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${p.name === dashboardSelectedProject ? 'bg-white/15' : 'bg-white/5 hover:bg-white/10'} text-[#ececec]`}
+                            onClick={() => {
+                              setDashboardSelectedProject(p.name)
+                              setSelectedProject(p.name)
+                            }}
+                          >
+                            <div className="font-medium truncate">{p.name}</div>
+                            <div className="text-xs text-[#bdbdbd] mt-0.5 truncate">Updated {new Date(p.updatedAt).toLocaleDateString()}</div>
+                          </button>
+                        ))}
                       </div>
                     </div>
-
-                    {/* AI History (now only inside project view) */}
-                    <section className="bg-white/5 rounded-xl border border-white/10 p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm font-semibold flex items-center gap-2">
-                          <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">🧠</span>
-                          AI History
-                        </div>
-                        <button className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs">Export</button>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        {(messages.length ? messages.slice(-10) : [
-                          { role: 'assistant', content: 'Welcome! How can I help?' },
-                          { role: 'user', content: 'Draft an email follow-up' },
-                          { role: 'assistant', content: 'Here is a friendly follow-up draft…' },
-                        ]).map((m: any, i: number) => (
-                          <div key={i} className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5]">
-                            <span className="opacity-70 pr-2">{m.role === 'user' ? 'You:' : 'AI:'}</span>
-                            <span className="truncate inline-block max-w-full align-middle">{m.content}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-
-                    {/* Your Context */}
-                    <section className="bg-white/5 rounded-xl border border-white/10 p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm font-semibold flex items-center gap-2">
-                          <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">📚</span>
-                          Your Context
-                        </div>
-                        <button
-                          className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
-                          onClick={() => {
-                            const projectName = dashboardSelectedProject as string
-                            setProjectEntries(prev => {
-                              const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
-                              const idx = curr.contexts.length + 1
-                              const next = {
-                                ...curr,
-                                contexts: [...curr.contexts, { name: `Context ${idx}`, owner: currentUser }]
-                              }
-                              return { ...prev, [projectName]: next }
-                            })
-                          }}
-                        >
-                          New
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        {(projectEntries[dashboardSelectedProject as string]?.contexts ?? defaultContexts).map((item, idx) => (
-                          <div key={`${item.name}-${item.owner}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center justify-between">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
-                                {avatarInitial(item.owner)}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate font-medium">{item.name}</div>
-                                <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => {
-                                  const projectName = dashboardSelectedProject as string
-                                  const newName = window.prompt('Edit context name', item.name)
-                                  if (!newName) return
-                                  setProjectEntries(prev => {
-                                    const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
-                                    const next = { ...curr }
-                                    next.contexts = curr.contexts.map((c, i) => i === idx ? { ...c, name: newName } : c)
-                                    return { ...prev, [projectName]: next }
-                                  })
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => {
-                                  const projectName = dashboardSelectedProject as string
-                                  setProjectEntries(prev => {
-                                    const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
-                                    const next = { ...curr, contexts: curr.contexts.filter((_, i) => i !== idx) }
-                                    return { ...prev, [projectName]: next }
-                                  })
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-
-                    {/* Your Subagents */}
-                    <section className="bg-white/5 rounded-xl border border-white/10 p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm font-semibold flex items-center gap-2">
-                          <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">🤝</span>
-                          Your Subagents
-                        </div>
-                        <button
-                          className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
-                          onClick={() => {
-                            const projectName = dashboardSelectedProject as string
-                            setProjectEntries(prev => {
-                              const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
-                              const idx = curr.subagents.length + 1
-                              const next = {
-                                ...curr,
-                                subagents: [...curr.subagents, { name: `Agent ${idx}`, owner: currentUser }]
-                              }
-                              return { ...prev, [projectName]: next }
-                            })
-                          }}
-                        >
-                          New
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        {(projectEntries[dashboardSelectedProject as string]?.subagents ?? defaultSubagents).map((item, idx) => (
-                          <div key={`${item.name}-${item.owner}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center justify-between">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
-                                {avatarInitial(item.owner)}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate font-medium">{item.name}</div>
-                                <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => {
-                                  const projectName = dashboardSelectedProject as string
-                                  const newName = window.prompt('Edit subagent name', item.name)
-                                  if (!newName) return
-                                  setProjectEntries(prev => {
-                                    const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
-                                    const next = { ...curr }
-                                    next.subagents = curr.subagents.map((s, i) => i === idx ? { ...s, name: newName } : s)
-                                    return { ...prev, [projectName]: next }
-                                  })
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
-                                onClick={() => {
-                                  const projectName = dashboardSelectedProject as string
-                                  setProjectEntries(prev => {
-                                    const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
-                                    const next = { ...curr, subagents: curr.subagents.filter((_, i) => i !== idx) }
-                                    return { ...prev, [projectName]: next }
-                                  })
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-
-                    {/* Your Team (shared) */}
-                    <section className="bg-white/5 rounded-xl border border-white/10 p-4">
-                      <div className="text-sm font-semibold mb-3">Your Team</div>
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Team Context */}
-                        <div className="bg-white/5 rounded-lg border border-white/10 p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-sm font-semibold flex items-center gap-2">
-                              <span className="inline-flex w-5 h-5 items-center justify-center rounded-md bg-white/10">📚</span>
-                              Team Context
-                            </div>
-                            <button
-                              className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
-                              onClick={() => {
-                                const idx = teamSharedContexts.length + 1
-                                setTeamSharedContexts(prev => [...prev, { name: `Team Context ${idx}`, owner: 'Team' }])
-                              }}
-                            >
-                              Add
-                            </button>
-                          </div>
-                          <div className="space-y-2 text-sm">
-                            {teamSharedContexts.map((item, i) => (
-                              <div key={`${item.name}-${i}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
-                                  {avatarInitial(item.owner)}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="truncate font-medium">{item.name}</div>
-                                  <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Team Subagents */}
-                        <div className="bg-white/5 rounded-lg border border-white/10 p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-sm font-semibold flex items-center gap-2">
-                              <span className="inline-flex w-5 h-5 items-center justify-center rounded-md bg-white/10">🤝</span>
-                              Team Subagents
-                            </div>
-                            <button
-                              className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
-                              onClick={() => {
-                                const idx = teamSharedSubagents.length + 1
-                                setTeamSharedSubagents(prev => [...prev, { name: `Team Agent ${idx}`, owner: 'Team' }])
-                              }}
-                            >
-                              Add
-                            </button>
-                          </div>
-                          <div className="space-y-2 text-sm">
-                            {teamSharedSubagents.map((item, i) => (
-                              <div key={`${item.name}-${i}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
-                                  {avatarInitial(item.owner)}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="truncate font-medium">{item.name}</div>
-                                  <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
+                  </aside>
                 )}
-              </main>
+
+                {/* Details panel */}
+                <main className="flex-1 p-5 space-y-4 overflow-auto">
+                  {!dashboardSelectedProject ? (
+                    <div className="h-full min-h-[60vh] flex items-center justify-center">
+                      <div className="text-center max-w-lg">
+                        <div className="inline-flex w-12 h-12 items-center justify-center rounded-xl bg-white/10 mb-4">📁</div>
+                        <h2 className="text-2xl font-semibold mb-2">Projects</h2>
+                        <p className="text-[#cfcfcf]/80 mb-4">Select a project to view its AI History, Your Context, and Your Subagents.</p>
+                        <button
+                          className="px-3 py-2 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                          onClick={() => {
+                            const nextName = `New Project ${projects.length + 1}`
+                            const now = new Date().toISOString()
+                            setProjects(prev => [...prev, { name: nextName, createdAt: now, updatedAt: now }])
+                            setSelectedProject(nextName)
+                            setDashboardSelectedProject(nextName)
+                          }}
+                        >
+                          Create New Project
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      {/* Project header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm"
+                            onClick={() => setDashboardSelectedProject(null)}
+                          >
+                            ← Back to Projects
+                          </button>
+                          <div>
+                            <div className="text-sm text-[#bdbdbd]">Project</div>
+                            <div className="text-xl font-semibold">{dashboardSelectedProject}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm">Share</button>
+                          <button className="px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-sm">Settings</button>
+                        </div>
+                      </div>
+
+                      {/* AI History (now only inside project view) */}
+                      <section className="bg-white/5 rounded-xl border border-white/10 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-sm font-semibold flex items-center gap-2">
+                            <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">🧠</span>
+                            AI History
+                          </div>
+                          <button className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs">Export</button>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          {(messages.length ? messages.slice(-10) : [
+                            { role: 'assistant', content: 'Welcome! How can I help?' },
+                            { role: 'user', content: 'Draft an email follow-up' },
+                            { role: 'assistant', content: 'Here is a friendly follow-up draft…' },
+                          ]).map((m: any, i: number) => (
+                            <div key={i} className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5]">
+                              <span className="opacity-70 pr-2">{m.role === 'user' ? 'You:' : 'AI:'}</span>
+                              <span className="truncate inline-block max-w-full align-middle">{m.content}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      {/* Your Context */}
+                      <section className="bg-white/5 rounded-xl border border-white/10 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-sm font-semibold flex items-center gap-2">
+                            <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">📚</span>
+                            Your Context
+                          </div>
+                          <button
+                            className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
+                            onClick={() => {
+                              const projectName = dashboardSelectedProject as string
+                              setProjectEntries(prev => {
+                                const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
+                                const idx = curr.contexts.length + 1
+                                const next = {
+                                  ...curr,
+                                  contexts: [...curr.contexts, { name: `Context ${idx}`, owner: currentUser }]
+                                }
+                                return { ...prev, [projectName]: next }
+                              })
+                            }}
+                          >
+                            New
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          {(projectEntries[dashboardSelectedProject as string]?.contexts ?? defaultContexts).map((item, idx) => (
+                            <div key={`${item.name}-${item.owner}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
+                                  {avatarInitial(item.owner)}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium">{item.name}</div>
+                                  <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+                                  onClick={() => {
+                                    const projectName = dashboardSelectedProject as string
+                                    const newName = window.prompt('Edit context name', item.name)
+                                    if (!newName) return
+                                    setProjectEntries(prev => {
+                                      const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
+                                      const next = { ...curr }
+                                      next.contexts = curr.contexts.map((c, i) => i === idx ? { ...c, name: newName } : c)
+                                      return { ...prev, [projectName]: next }
+                                    })
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+                                  onClick={() => {
+                                    const projectName = dashboardSelectedProject as string
+                                    setProjectEntries(prev => {
+                                      const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
+                                      const next = { ...curr, contexts: curr.contexts.filter((_, i) => i !== idx) }
+                                      return { ...prev, [projectName]: next }
+                                    })
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      {/* Your Subagents */}
+                      <section className="bg-white/5 rounded-xl border border-white/10 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-sm font-semibold flex items-center gap-2">
+                            <span className="inline-flex w-6 h-6 items-center justify-center rounded-md bg-white/10">🤝</span>
+                            Your Subagents
+                          </div>
+                          <button
+                            className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
+                            onClick={() => {
+                              const projectName = dashboardSelectedProject as string
+                              setProjectEntries(prev => {
+                                const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
+                                const idx = curr.subagents.length + 1
+                                const next = {
+                                  ...curr,
+                                  subagents: [...curr.subagents, { name: `Agent ${idx}`, owner: currentUser }]
+                                }
+                                return { ...prev, [projectName]: next }
+                              })
+                            }}
+                          >
+                            New
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          {(projectEntries[dashboardSelectedProject as string]?.subagents ?? defaultSubagents).map((item, idx) => (
+                            <div key={`${item.name}-${item.owner}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
+                                  {avatarInitial(item.owner)}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium">{item.name}</div>
+                                  <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+                                  onClick={() => {
+                                    const projectName = dashboardSelectedProject as string
+                                    const newName = window.prompt('Edit subagent name', item.name)
+                                    if (!newName) return
+                                    setProjectEntries(prev => {
+                                      const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
+                                      const next = { ...curr }
+                                      next.subagents = curr.subagents.map((s, i) => i === idx ? { ...s, name: newName } : s)
+                                      return { ...prev, [projectName]: next }
+                                    })
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+                                  onClick={() => {
+                                    const projectName = dashboardSelectedProject as string
+                                    setProjectEntries(prev => {
+                                      const curr = prev[projectName] ?? { subagents: [...defaultSubagents], contexts: [...defaultContexts] }
+                                      const next = { ...curr, subagents: curr.subagents.filter((_, i) => i !== idx) }
+                                      return { ...prev, [projectName]: next }
+                                    })
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      {/* Your Team (shared) */}
+                      <section className="bg-white/5 rounded-xl border border-white/10 p-4">
+                        <div className="text-sm font-semibold mb-3">Your Team</div>
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Team Context */}
+                          <div className="bg-white/5 rounded-lg border border-white/10 p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-semibold flex items-center gap-2">
+                                <span className="inline-flex w-5 h-5 items-center justify-center rounded-md bg-white/10">📚</span>
+                                Team Context
+                              </div>
+                              <button
+                                className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
+                                onClick={() => {
+                                  const idx = teamSharedContexts.length + 1
+                                  setTeamSharedContexts(prev => [...prev, { name: `Team Context ${idx}`, owner: 'Team' }])
+                                }}
+                              >
+                                Add
+                              </button>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              {teamSharedContexts.map((item, i) => (
+                                <div key={`${item.name}-${i}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center gap-2">
+                                  <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
+                                    {avatarInitial(item.owner)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="truncate font-medium">{item.name}</div>
+                                    <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Team Subagents */}
+                          <div className="bg-white/5 rounded-lg border border-white/10 p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-semibold flex items-center gap-2">
+                                <span className="inline-flex w-5 h-5 items-center justify-center rounded-md bg-white/10">🤝</span>
+                                Team Subagents
+                              </div>
+                              <button
+                                className="px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 text-xs"
+                                onClick={() => {
+                                  const idx = teamSharedSubagents.length + 1
+                                  setTeamSharedSubagents(prev => [...prev, { name: `Team Agent ${idx}`, owner: 'Team' }])
+                                }}
+                              >
+                                Add
+                              </button>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              {teamSharedSubagents.map((item, i) => (
+                                <div key={`${item.name}-${i}`} className="px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-[#e5e5e5] flex items-center gap-2">
+                                  <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarGradient(item.owner)} text-black/80 flex items-center justify-center text-xs font-semibold`}>
+                                    {avatarInitial(item.owner)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="truncate font-medium">{item.name}</div>
+                                    <div className="text-xs text-[#bdbdbd] truncate">by {item.owner}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                </main>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
       {/* Drag handle bar (frameless window) */}
       <div
         className="fixed top-0 left-0 right-0 h-8 z-30"
@@ -1332,7 +1716,7 @@ export default function App() {
       />
 
       {/* Removed debug/test toggle buttons for cleaner UI */}
-      
+
       {/* Main chat area */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {/* Messages area */}
@@ -1345,7 +1729,7 @@ export default function App() {
                   {codexReady && (
                     <div className="flex items-center justify-center gap-2 text-[#19c37d] mb-4">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="20 6 9 17 4 12"/>
+                        <polyline points="20 6 9 17 4 12" />
                       </svg>
                       <span className="text-sm font-medium">Codex Initialized</span>
                     </div>
@@ -1359,11 +1743,10 @@ export default function App() {
                     <div className="flex gap-4">
                       {/* Avatar */}
                       <div className="flex-shrink-0">
-                        <div className={`w-8 h-8 rounded-sm flex items-center justify-center text-white ${
-                          msg.role === 'user'
-                            ? 'bg-[#5436da]'
-                            : 'bg-[#19c37d]'
-                        }`}>
+                        <div className={`w-8 h-8 rounded-sm flex items-center justify-center text-white ${msg.role === 'user'
+                          ? 'bg-[#5436da]'
+                          : 'bg-[#19c37d]'
+                          }`}>
                           {msg.role === 'user' ? '5' : '✓'}
                         </div>
                       </div>
@@ -1392,16 +1775,36 @@ export default function App() {
             {/* Left icons */}
             <button className="p-2 hover:bg-[#3a3a3a] rounded-lg transition-colors text-[#ececec]">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
             </button>
 
             <button className="p-2 hover:bg-[#3a3a3a] rounded-lg transition-colors text-[#ececec]">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                <polyline points="13 2 13 9 20 9"/>
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                <polyline points="13 2 13 9 20 9" />
               </svg>
+            </button>
+
+            {/* Voice mic */}
+            <button
+              className={`p-2 rounded-lg transition-colors ${voiceRecording ? 'bg-red-600/30 text-red-400' : 'hover:bg-[#3a3a3a] text-[#ececec]'}`}
+              title={voiceRecording ? 'Stop recording' : 'Start voice'}
+              onClick={() => (voiceRecording ? void stopVoice() : void startVoice())}
+            >
+              {voiceRecording ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="6" y="6" width="12" height="12" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              )}
             </button>
 
             {/* Input field */}
@@ -1428,7 +1831,7 @@ export default function App() {
               onClick={() => setShowDashboard(true)}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="17" rx="3"/>
+                <rect x="3" y="4" width="18" height="17" rx="3" />
                 <line x1="3" y1="9" x2="21" y2="9" />
                 <line x1="12" y1="9" x2="12" y2="21" />
               </svg>
@@ -1442,10 +1845,10 @@ export default function App() {
                 onClick={() => setShowProjectsMenu(v => !v)}
               >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="8" height="8" rx="2"/>
-                  <rect x="13" y="3" width="8" height="8" rx="2"/>
-                  <rect x="3" y="13" width="8" height="8" rx="2"/>
-                  <rect x="13" y="13" width="8" height="8" rx="2"/>
+                  <rect x="3" y="3" width="8" height="8" rx="2" />
+                  <rect x="13" y="3" width="8" height="8" rx="2" />
+                  <rect x="3" y="13" width="8" height="8" rx="2" />
+                  <rect x="13" y="13" width="8" height="8" rx="2" />
                 </svg>
               </button>
               {showProjectsMenu && (
@@ -1484,8 +1887,8 @@ export default function App() {
                           }}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="12" y1="5" x2="12" y2="19"/>
-                            <line x1="5" y1="12" x2="19" y2="12"/>
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
                           </svg>
                           <span className="font-medium">Create new project</span>
                         </button>
@@ -1497,14 +1900,7 @@ export default function App() {
               )}
             </div>
 
-            <button className="p-2 hover:bg-[#3a3a3a] rounded-lg transition-colors text-[#ececec]">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8" y1="23" x2="16" y2="23"/>
-              </svg>
-            </button>
+            {/* Removed duplicate mic near side panel */}
 
             <button
               className="p-2 hover:bg-[#3a3a3a] rounded-lg transition-colors text-[#ececec]"
@@ -1523,6 +1919,20 @@ export default function App() {
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Voice progress overlay */}
+      {
+        (voiceRecording || voiceBusy) && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <div className="bg-black/80 border border-white/10 rounded-xl backdrop-blur-xl text-white px-3 py-2 text-sm shadow-2xl min-w-[220px]">
+              {voiceRecording ? 'Listening… click to stop' : 'Processing…'}
+              <div className="mt-1 text-xs text-[#bbbbbb]">
+                {voiceRecording ? 'Speak now' : 'Transcribe → LLM → TTS'}
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div >
   )
 }

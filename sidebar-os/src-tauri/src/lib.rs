@@ -292,7 +292,8 @@ pub fn run() {
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
+            // In dev, crank log level to Debug so we capture bridge/api events in the Tauri console.
+            .level(log::LevelFilter::Debug)
             .targets([
               Target::new(TargetKind::Stdout),
               Target::new(TargetKind::LogDir { file_name: None })

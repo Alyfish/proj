@@ -1,0 +1,9 @@
+{
+    "name": "@email-assistant/common",
+    "version": "0.1.0",
+    "main": "index.ts",
+    "dependencies": {
+        "better-sqlite3": "^12.4.6",
+        "openai": "^6.9.1"
+    }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "email-assistant-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "orchestrator",
+    "agents/*",
+    "common"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "start": "npm start -w orchestrator"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.0.0"
+  }
+}

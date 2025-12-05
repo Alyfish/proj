@@ -30,7 +30,7 @@ graph TB
     S --> DB[(SQLite Database)]
     
     R -.->|Gmail API| Gmail[Gmail API]
-    A -.->|LLM Call| OpenAI[OpenAI GPT-4]
+    A -.->|LLM Call| OpenAI[OpenAI GPT-5]
     
     DB --> Output[User Tasks & Suggestions]
     
@@ -195,7 +195,7 @@ sequenceDiagram
 3. Stores analysis in `emails.analysis` field
 
 **Key Logic:**
-- Uses `gpt-4o-mini` with JSON mode for reliability
+- Uses `gpt-5` with JSON mode for reliability
 - Handles multipart MIME emails
 - Base64 decoding for email bodies
 

@@ -166,7 +166,7 @@ async inferGoalsFromBehavior(patterns: InteractionPattern[]): Promise<UserGoal[]
     }
   `;
   
-  const response = await llm.callModel(prompt, 'You are a goal inference assistant.', 'gpt-4o', true);
+  const response = await llm.callModel(prompt, 'You are a goal inference assistant.', 'gpt-5', true);
   return JSON.parse(response).goals;
 }
 ```

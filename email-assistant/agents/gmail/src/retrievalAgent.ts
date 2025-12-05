@@ -68,7 +68,7 @@ export class EmailRetrievalAgent implements Agent<EmailRetrievalInput, EmailRetr
             let cleanQuery = input.searchQuery.trim();
             try {
                 const { llm } = require('@email-assistant/common/src/llm');
-                const refinedQuery = await llm.callModel(prompt, 'You are a Gmail search expert. Output only the query string.', 'gpt-4o-mini');
+                const refinedQuery = await llm.callModel(prompt, 'You are a Gmail search expert. Output only the query string.', 'gpt-5');
 
                 if (refinedQuery) {
                     cleanQuery = refinedQuery.replace(/^"|"$/g, '').trim();

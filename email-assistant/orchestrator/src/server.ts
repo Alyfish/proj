@@ -122,7 +122,10 @@ app.post('/api/process', async (req: Request, res: Response) => {
                 deadline: parsed.actions?.[0]?.dueDate,
                 entities: parsed.entities || [],
                 relevance: parsed.relevance,
-                travelDetails: parsed.travelDetails
+                travelDetails: parsed.travelDetails,
+                answer: parsed.answer,
+                key_facts: parsed.key_facts,
+                structuredEntities: parsed.structuredEntities
             } as any;
         });
 
@@ -142,7 +145,7 @@ app.post('/api/process', async (req: Request, res: Response) => {
             `).all(userId, ...rankedAnalysisIds.slice(0, 8)) as any[];
             // Preserve original relevance order
             const orderMap = new Map<string, number>();
-            rankedAnalysisIds.slice(0, 8).forEach((id, idx) => orderMap.set(id, idx));
+            rankedAnalysisIds.slice(0, 8).forEach((id: string, idx: number) => orderMap.set(id, idx));
             recentEmails.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
         }
 

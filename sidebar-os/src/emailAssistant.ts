@@ -95,9 +95,9 @@ export class EmailAssistantClient {
      * Process emails for a user
      */
     async processEmails(userId: string, query?: string): Promise<EmailAssistantResponse> {
-        try {
-            const response = await this.fetchWithRetry(
-                `${this.baseUrl}/process`,
+        const tryFetch = async (urlBase: string) => {
+            return await this.fetchWithRetry(
+                `${urlBase}/process`,
                 {
                     method: 'POST',
                     headers: {
@@ -108,6 +108,22 @@ export class EmailAssistantClient {
                 1, // one retry on network failure
                 60000 // up to 60s to allow first-run uncached processing
             );
+        };
+
+        try {
+            let response: Response;
+            try {
+                response = await tryFetch(this.baseUrl);
+            } catch (err) {
+                // If localhost fails, try 127.0.0.1 as fallback if we're using default localhost
+                if (this.baseUrl.includes('localhost')) {
+                    console.warn('Failed to connect to localhost, trying 127.0.0.1...');
+                    const fallbackUrl = this.baseUrl.replace('localhost', '127.0.0.1');
+                    response = await tryFetch(fallbackUrl);
+                } else {
+                    throw err;
+                }
+            }
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -133,8 +149,22 @@ export class EmailAssistantClient {
      * Get processing status for a user
      */
     async getStatus(userId: string): Promise<StatusResponse> {
+        const tryFetch = async (urlBase: string) => {
+            return await fetch(`${urlBase}/status?userId=${encodeURIComponent(userId)}`);
+        };
+
         try {
-            const response = await fetch(`${this.baseUrl}/status?userId=${encodeURIComponent(userId)}`);
+            let response: Response;
+            try {
+                response = await tryFetch(this.baseUrl);
+            } catch (err) {
+                if (this.baseUrl.includes('localhost')) {
+                    const fallbackUrl = this.baseUrl.replace('localhost', '127.0.0.1');
+                    response = await tryFetch(fallbackUrl);
+                } else {
+                    throw err;
+                }
+            }
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -160,9 +190,21 @@ export class EmailAssistantClient {
      * Check if the API server is running
      */
     async healthCheck(): Promise<boolean> {
-        try {
-            const response = await fetch(`${this.baseUrl}/health`);
+        const tryFetch = async (urlBase: string) => {
+            const response = await fetch(`${urlBase}/health`);
             return response.ok;
+        };
+
+        try {
+            try {
+                return await tryFetch(this.baseUrl);
+            } catch (err) {
+                if (this.baseUrl.includes('localhost')) {
+                    const fallbackUrl = this.baseUrl.replace('localhost', '127.0.0.1');
+                    return await tryFetch(fallbackUrl);
+                }
+                throw err;
+            }
         } catch (error) {
             console.error('Health check failed:', error);
             return false;

@@ -131,7 +131,7 @@ Return JSON with inferred goals (only if confidence > 0.6):
             const response = await llm.callModel(
                 prompt,
                 'You are a goal inference assistant. Only infer goals with high confidence (>0.6). Return valid JSON only.',
-                'gpt-4o-mini',
+                'gpt-5',
                 true
             );
 

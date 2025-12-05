@@ -166,23 +166,31 @@ export class AnalysisAgent implements Agent<AnalysisInput, AnalysisOutput> {
             
             Instructions:
             1.  **Summary**: Provide a concise summary (2-3 sentences). If a query is present, focus the summary on answering that query.
-            2.  **Action Items**: Extract concrete tasks. If none, return empty array.
-            3.  **Entities**: Extract key people, companies, or projects mentioned.
-            4.  **Relevance**: Score 0-10 based on importance to the user's goals or query.
-            5.  **Details**: If the user asked a specific question (e.g. "what investments"), extract HARD FACTS: names, amounts, dates, terms, URLs. Do not just say "it discusses investments". List them.
+            2.  **Answer**: If the user asked a specific question (query is present), provide a DIRECT, concise answer (1-2 sentences). If no query, leave null.
+            3.  **Action Items**: Extract concrete tasks. If none, return empty array.
+            4.  **Key Facts**: Extract structured facts as key-value pairs (e.g., "Amount": "$500", "Due Date": "2023-12-01", "Invoice #": "INV-123").
+            5.  **Entities**: Extract and categorize key entities (people, organizations, locations, dates).
+            6.  **Relevance**: Score 0-10 based on importance to the user's goals or query.
             
             Return JSON:
             {
                 "summary": "string",
+                "answer": "string | null",
                 "actions": [{"description": "string", "dueDate": "string (optional)"}],
-                "entities": ["string"],
+                "key_facts": {"key": "value"},
+                "structuredEntities": {
+                    "people": ["string"],
+                    "organizations": ["string"],
+                    "locations": ["string"],
+                    "dates": ["string"]
+                },
                 "relevance": number
             }
             `;
-                const jsonStr = await llm.callModel(prompt, 'You are an expert email analyst. Output valid JSON only.', 'gpt-4o-mini', true);
+                const jsonStr = await llm.callModel(prompt, 'You are an expert email analyst. Output valid JSON only.', 'gpt-5', true);
 
                 if (jsonStr) {
-                    const analysis = JSON.parse(jsonStr) as Omit<EmailAnalysisResult, 'emailId'>;
+                    const analysis = JSON.parse(jsonStr) as any;
                     const isSearch = tokens.length > 0;
                     if (!isSearch && typeof analysis.relevance === 'number' && analysis.relevance < 0.3) {
                         // For general runs, skip very low relevance; for explicit searches keep everything.
@@ -192,7 +200,16 @@ export class AnalysisAgent implements Agent<AnalysisInput, AnalysisOutput> {
                     const travelDetails = this.extractTravelDetails(email, body);
                     const result: EmailAnalysisResult = {
                         emailId: email.id,
-                        ...analysis,
+                        summary: analysis.summary,
+                        actions: analysis.actions || [],
+                        entities: [
+                            ...(analysis.structuredEntities?.people || []),
+                            ...(analysis.structuredEntities?.organizations || [])
+                        ], // Flatten for backward compatibility
+                        relevance: analysis.relevance,
+                        answer: analysis.answer,
+                        key_facts: analysis.key_facts,
+                        structuredEntities: analysis.structuredEntities,
                         ...(travelDetails ? { travelDetails } : {})
                     };
 
@@ -237,7 +254,7 @@ export class AnalysisAgent implements Agent<AnalysisInput, AnalysisOutput> {
         this.gmail = new GmailClient();
     }
 
-    private async getFullText(email: EmailMetadata & { priority: 'high' | 'medium' | 'low' }): Promise<string> {
+    private async getFullText(email: EmailMetadata): Promise<string> {
         if (this.bodyCache.has(email.id)) return this.bodyCache.get(email.id)!;
         await this.ensureGmail();
         const msg = await this.gmail.getMessage(email.id);

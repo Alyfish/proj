@@ -1,12 +1,13 @@
 # proj
 
-A desktop+web demo app (Tauri + React + Vite + Tailwind) that provides a floating AI assistant with a project‑centric dashboard.
+A desktop+web demo app (Tauri + React + Vite + Tailwind) that provides a floating AI assistant with a project‑centric dashboard — now with an email-assistant backend (Node/TS) for inbox retrieval, analysis, and suggestions.
 
 - Floating collapsed pill you can drag anywhere; position persists
 - Hover actions on the pill: Record / Stop with a small status popup
 - Chat experience with an action notification demo
 - Project‑centric Dashboard with per‑project Context/Subagents and team‑shared items
 - Window modes: collapsed, expanded, sidepanel, with custom position saving
+- Email assistant: retrieval/prioritization/analysis/suggestions with travel-aware extraction and relevance ranking
 
 ## Quick Start
 
@@ -37,6 +38,17 @@ cd sidebar-os
 npm run tauri:build
 ```
 
+### Email Assistant API (backend)
+
+```
+cd email-assistant/orchestrator
+npm install   # first time
+npm run start:server
+# API at http://localhost:3001
+```
+
+Env: add `OPENAI_API_KEY` to `email-assistant/.env`. Do NOT commit Gmail `credentials.json`/`token.json`; set via `GMAIL_CREDENTIALS_PATH`/`GMAIL_TOKEN_PATH` or env strings.
+
 ## Key Features
 
 - Collapsed Pill
@@ -64,12 +76,19 @@ npm run tauri:build
   - Modes: collapsed, expanded, sidepanel
   - Cmd+1 toggles collapsed/expanded in the desktop build (wired via Tauri)
   - Positions for collapsed/expanded/sidepanel persist; reset helpers included in UI
+- Email Assistant pipeline
+  - Gmail retrieval with intent-aware query refinement and 30d recency default
+  - Prioritization with query-aware boosts and thread dedupe
+  - Analysis with full-body decoding, embeddings, and domain signals (travel parsing: PNR/legs)
+  - Suggestions: domain-aware “trip summary” plus concise next steps
+  - UI: relevance-ranked email list, travel icon on trip emails, longer timeout + retry on first-run fetch
 
 ## File Map
 
 - `sidebar-os/src/App.tsx` — main UI (chat, collapsed pill, dashboard, notification demo)
 - `sidebar-os/src/codex.ts` — mock Codex service for demo
 - `sidebar-os/src-tauri` — Tauri config and Rust entrypoints
+- `email-assistant/` — backend monorepo (agents, orchestrator, common)
 
 ## Customization Tips
 

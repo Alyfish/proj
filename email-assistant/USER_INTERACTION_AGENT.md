@@ -14,33 +14,33 @@ interface UserInteractionInput {
   userId: string;
   inferredGoals?: UserGoal[]; // Goals detected from behavior
   ambiguousEmails?: EmailMetadata[]; // Emails that need clarification
-  conversationContext?: ConversationHistory;
+  mode?: 'onboarding' | 'confirmation' | 'weekly_checkin';
 }
 
 interface UserInteractionOutput {
   confirmedGoals: UserGoal[];
   newGoals: UserGoal[];
   userResponses: Map<string, string>; // question -> answer
-  clarifications: EmailClarification[];
 }
 
 class UserInteractionAgent implements Agent<UserInteractionInput, UserInteractionOutput> {
   name = 'UserInteractionAgent';
   
   async run(input: UserInteractionInput): Promise<UserInteractionOutput> {
-    // 1. Generate questions based on context
-    const questions = await this.generateQuestions(input);
+    // 1. Determine mode (if not provided)
+    const mode = input.mode || this.determineMode(input);
     
-    // 2. Present to user (via CLI, UI, or chat)
-    const responses = await this.askUser(questions);
-    
-    // 3. Parse and validate responses
-    const parsed = await this.parseResponses(responses);
-    
-    // 4. Update goal database
-    await this.updateGoals(parsed);
-    
-    return parsed;
+    // 2. Execute specific flow
+    switch (mode) {
+      case 'onboarding':
+        return await this.onboardUser(input.userId);
+      case 'confirmation':
+        return await this.confirmGoals(input.userId, input.inferredGoals || []);
+      case 'weekly_checkin':
+        return await this.weeklyCheckin(input.userId);
+      default:
+        return { confirmedGoals: [], newGoals: [], userResponses: new Map() };
+    }
   }
 }
 ```

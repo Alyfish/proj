@@ -56,6 +56,15 @@ export interface EmailAnalysisResult {
     isUrgent?: boolean;
     relevance?: number;
     replyDraft?: string;
+    // New context fields
+    answer?: string; // Direct answer to the user's query
+    key_facts?: { [key: string]: string | number }; // Structured facts (e.g. "Amount": "$500")
+    structuredEntities?: {
+        people: string[];
+        organizations: string[];
+        locations: string[];
+        dates: string[];
+    };
     // Optional structured domain-specific details (e.g., travel)
     travelDetails?: {
         pnr?: string;

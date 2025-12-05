@@ -18,7 +18,7 @@ export class LLMClient {
     async callModel(
         prompt: string,
         systemPrompt: string = 'You are a helpful assistant.',
-        model: string = 'gpt-4o-mini',
+        model: string = 'gpt-5',
         jsonMode: boolean = false
     ): Promise<string | null> {
         try {

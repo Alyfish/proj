@@ -1,18 +1,8 @@
 import { Agent, EmailMetadata, EmailAnalysisResult } from '@email-assistant/common/src/types';
 import { db } from '@email-assistant/common/src/db';
 import { llm } from '@email-assistant/common/src/llm';
-import { GmailClient } from '@email-assistant/agent-gmail/src/gmailClient'; // Cross-agent import, or duplicate client? Better to use common interface or direct import if monorepo allows.
-// Since we are in a monorepo, we can import from the other package if we set up paths, 
-// but for simplicity/speed, we might just instantiate the client or pass it in.
-// Actually, the Retrieval Agent already fetched metadata. 
-// If we need the BODY, we might need to fetch it again if we didn't store it.
-// The plan said "Fetch full body (from DB or via Gmail)". 
-// Our current DB schema has 'snippet' but not full body. 
-// Let's assume we fetch it from Gmail on demand for analysis.
-
-// We need to fix the import path. 
-// In a real monorepo with workspaces, we'd import '@email-assistant/agent-gmail'.
-// Let's assume the package name is correct.
+import { GmailClient } from '@email-assistant/agent-gmail/src/gmailClient';
+import { EmailSummarizer } from './emailSummarizer';
 
 type IntentType = 'search' | 'reply' | 'process';
 
@@ -30,17 +20,15 @@ interface AnalysisOutput {
 
 export class AnalysisAgent implements Agent<AnalysisInput, AnalysisOutput> {
     name = 'AnalysisAgent';
-    private gmail: any; // Lazy load or loose type to avoid circular dep issues if not set up perfectly
+    private gmail: any;
     private bodyCache: Map<string, string> = new Map();
     private embeddingCache: Map<string, number[]> = new Map();
+    private summarizer = new EmailSummarizer();
     private travelKeywords = ['flight', 'itinerary', 'itenerary', 'trip', 'pnr', 'confirmation', 'boarding', 'depart', 'arrival', 'airport'];
     private airlineHintRegex = /(airlines?|airways?|delta|united|american|alaska|frontier|spirit|jetblue|southwest|lufthansa|qatar|emirates|etihad|air france|klm|qantas|turkish|alitalia|british airways|virgin|expedia|booking\.com|orbitz|travelocity|air canada)/i;
 
     constructor() {
-        // We'll dynamically import or just assume we can use the class if available.
-        // For now, let's try to import the class directly from the relative path if possible, 
-        // or just assume we can instantiate it. 
-        // Ideally, we'd inject this dependency.
+        // Summarizer initialized above
     }
 
     async run(input: AnalysisInput): Promise<AnalysisOutput> {
@@ -121,9 +109,9 @@ export class AnalysisAgent implements Agent<AnalysisInput, AnalysisOutput> {
                     }
                 }
                 const fullText = await this.getFullText(email);
-                // Cap text length to avoid over-length embedding requests.
-                const trimmed = fullText.slice(0, 6000);
-                const vec = await llm.embed(trimmed);
+                // Use summarizer to create optimized embedding text (1500 chars max)
+                const embeddingText = this.summarizer.createEmbeddingText(email, fullText);
+                const vec = await llm.embed(embeddingText);
                 if (vec) {
                     this.embeddingCache.set(email.id, vec);
                     db.prepare('INSERT OR REPLACE INTO email_embeddings (email_id, embedding) VALUES (?, ?)').run(email.id, JSON.stringify(vec));
@@ -155,38 +143,26 @@ export class AnalysisAgent implements Agent<AnalysisInput, AnalysisOutput> {
                 // 1. Get full body
                 const body = await this.getFullText(email);
 
-                // 2. Call LLM
-                const prompt = `
-            Analyze this email for the user.
-            
-            Email Body:
-            "${body.substring(0, 8000)}"
-            
-            User's Query (if any): "${input.searchQuery || ''}"
-            
-            Instructions:
-            1.  **Summary**: Provide a concise summary (2-3 sentences). If a query is present, focus the summary on answering that query.
-            2.  **Answer**: If the user asked a specific question (query is present), provide a DIRECT, concise answer (1-2 sentences). If no query, leave null.
-            3.  **Action Items**: Extract concrete tasks. If none, return empty array.
-            4.  **Key Facts**: Extract structured facts as key-value pairs (e.g., "Amount": "$500", "Due Date": "2023-12-01", "Invoice #": "INV-123").
-            5.  **Entities**: Extract and categorize key entities (people, organizations, locations, dates).
-            6.  **Relevance**: Score 0-10 based on importance to the user's goals or query.
-            
-            Return JSON:
-            {
-                "summary": "string",
-                "answer": "string | null",
-                "actions": [{"description": "string", "dueDate": "string (optional)"}],
-                "key_facts": {"key": "value"},
-                "structuredEntities": {
-                    "people": ["string"],
-                    "organizations": ["string"],
-                    "locations": ["string"],
-                    "dates": ["string"]
-                },
-                "relevance": number
-            }
-            `;
+                // 2. Create optimized analysis text (2000 chars max)
+                const analysisText = this.summarizer.createAnalysisText(email, body, 2000);
+
+                // Log token estimate
+                const estimatedTokens = llm.estimateTokens(analysisText);
+                console.log(`[${this.name}] Analyzing ${email.id} (~${estimatedTokens} tokens)`);
+
+                // 3. Optimized LLM prompt (reduced verbosity)
+                const hasQuery = input.searchQuery && input.searchQuery.length > 0;
+                const prompt = `Analyze this email${hasQuery ? ' focusing on: "' + input.searchQuery + '"' : ''}.
+
+${analysisText}
+
+Return JSON with:
+- summary: 2-3 sentences${hasQuery ? ' answering the query' : ''}
+- answer: ${hasQuery ? 'Direct answer to query (1-2 sentences)' : 'null'}
+- actions: [{description, dueDate?}]
+- key_facts: {key: value} for amounts, dates, IDs
+- structuredEntities: {people: [], organizations: [], locations: [], dates: []}
+- relevance: 0-10 score`;
                 const jsonStr = await llm.callModel(prompt, 'You are an expert email analyst. Output valid JSON only.', 'gpt-5', true);
 
                 if (jsonStr) {

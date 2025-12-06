@@ -79,7 +79,7 @@ export class EmailAssistantClient {
         }
     }
 
-    private async fetchWithRetry(url: string, init: RequestInit, retries = 1, timeoutMs = 60000): Promise<Response> {
+    private async fetchWithRetry(url: string, init: RequestInit, retries = 1, timeoutMs = 300000): Promise<Response> {
         try {
             return await this.withTimeout(fetch(url, { ...init, signal: (init as any)?.signal }), timeoutMs);
         } catch (error) {
@@ -94,7 +94,7 @@ export class EmailAssistantClient {
     /**
      * Process emails for a user
      */
-    async processEmails(userId: string, query?: string): Promise<EmailAssistantResponse> {
+    async processEmails(userId: string, query?: string, quick?: boolean): Promise<EmailAssistantResponse> {
         const tryFetch = async (urlBase: string) => {
             return await this.fetchWithRetry(
                 `${urlBase}/process`,
@@ -103,10 +103,10 @@ export class EmailAssistantClient {
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ userId, query }),
+                    body: JSON.stringify({ userId, query, quick }),
                 },
                 1, // one retry on network failure
-                60000 // up to 60s to allow first-run uncached processing
+                300000 // up to 300s (5 min) to allow long-running processing
             );
         };
 

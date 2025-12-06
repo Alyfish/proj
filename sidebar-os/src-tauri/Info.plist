@@ -4,5 +4,10 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>Sidebar OS uses your microphone to capture voice input for the assistant.</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
 </dict>
 </plist>

@@ -10,7 +10,7 @@ type IntentType = 'search' | 'reply' | 'process';
 
 export async function runBatchForUser(
     userId: string,
-    opts?: { searchQuery?: string; maxAnalyze?: number; intent?: IntentType; maxRetrieve?: number }
+    opts?: { searchQuery?: string; maxAnalyze?: number; intent?: IntentType; maxRetrieve?: number; quickMode?: boolean }
 ) {
     console.log(`\n=== Starting Batch Run for User ${userId} ===`);
 
@@ -94,6 +94,19 @@ export async function runBatchForUser(
             }
         }
         const dedupedEmails = Array.from(byThread.values());
+
+        // Quick mode: return early with prioritized emails only
+        if (opts?.quickMode) {
+            console.log(`[runBatch] Quick mode: returning ${dedupedEmails.length} prioritized emails without analysis`);
+            db.prepare("UPDATE runs SET status = 'completed', completed_at = CURRENT_TIMESTAMP, metadata = ? WHERE id = ?")
+                .run(JSON.stringify({ quickMode: true, emailCount: dedupedEmails.length }), runId);
+
+            return {
+                suggestions: [],
+                context: contextResult,
+                quickMode: true
+            };
+        }
 
         // 4. Analysis
         const analysisAgent = new AnalysisAgent();

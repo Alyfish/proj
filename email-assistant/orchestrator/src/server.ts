@@ -35,7 +35,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 // Process emails endpoint
 app.post('/api/process', async (req: Request, res: Response) => {
     try {
-        const { userId, query, searchQuery } = req.body;
+        const { userId, query, searchQuery, quick } = req.body;
         const effectiveQuery = query || searchQuery;
         const intent = classifyIntent(effectiveQuery);
 
@@ -67,9 +67,10 @@ app.post('/api/process', async (req: Request, res: Response) => {
         // Run the email assistant pipeline
         const batchResult = await runBatchForUser(userId, {
             searchQuery: intent.normalizedQuery,
-            maxAnalyze: intent.intent === 'reply' ? 3 : 12,
+            maxAnalyze: intent.intent === 'reply' ? 2 : 5, // Reduced from 3 and 12
             maxRetrieve: intent.intent === 'reply' ? 80 : 250,
-            intent: intent.intent
+            intent: intent.intent,
+            quickMode: quick === true
         });
 
         const suggestions = Array.isArray(batchResult) ? batchResult : batchResult.suggestions;
@@ -182,10 +183,26 @@ app.post('/api/process', async (req: Request, res: Response) => {
             suggestions.length
         );
 
+        // Estimate token usage
+        const TOKEN_BUDGET = 10000;
+        let estimatedTokens = 0;
+
+        // Estimate tokens from analyses (rough approximation)
+        analyses.forEach((analysis: any) => {
+            const analysisText = JSON.stringify(analysis);
+            estimatedTokens += Math.ceil(analysisText.length / 4);
+        });
+
+        // Add prompt overhead estimate (~500 tokens per email analyzed)
+        estimatedTokens += analyses.length * 500;
+
         res.json({
             success: true,
             textOutput,
             quickStatus,
+            tokensUsed: estimatedTokens,
+            tokenBudget: TOKEN_BUDGET,
+            tokenEfficiency: estimatedTokens > 0 ? Math.round((1 - estimatedTokens / TOKEN_BUDGET) * 100) : 100,
             data: {
                 emailsProcessed: priorities.length,
                 suggestionsGenerated: suggestions.length,
@@ -260,11 +277,13 @@ app.get('/api/status', (req: Request, res: Response) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+// Increase server timeout to 5 minutes to match client
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Email Assistant API Server running on http://localhost:${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
     console.log(`📧 Process emails: POST http://localhost:${PORT}/api/process`);
     console.log(`📈 Status check: GET http://localhost:${PORT}/api/status?userId=<userId>\n`);
 });
+server.setTimeout(300000);
 
 export default app;

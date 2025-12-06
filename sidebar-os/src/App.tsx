@@ -700,7 +700,7 @@ export default function App() {
       // Show loading message
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '🔄 Processing your emails... This may take a moment.'
+        content: '🔄 Retrieving and prioritizing your emails...'
       }]);
 
       try {
@@ -716,9 +716,9 @@ export default function App() {
           return
         }
 
-        // Call email assistant API
+        // Call email assistant API with quick mode for faster response
         // Using a default user ID from env; backend expects this user to be seeded.
-        const result = await emailAssistant.processEmails(EMAIL_ASSISTANT_USER_ID, userInput);
+        const result = await emailAssistant.processEmails(EMAIL_ASSISTANT_USER_ID, userInput, false);
 
         if (result.success && result.textOutput) {
           const quickStatus = result.quickStatus ? `\n\n${result.quickStatus}` : ''
@@ -729,7 +729,11 @@ export default function App() {
           if (hasData) {
             const emailCount = result.data?.recentEmails?.length ?? 0;
             const suggestionCount = result.data?.suggestions?.length ?? 0;
-            chatMessage = `Found ${emailCount} relevant emails and generated ${suggestionCount} suggestions.\n\nCheck the **Email Insights** panel for details.`;
+            if (suggestionCount > 0) {
+              chatMessage = `Found ${emailCount} relevant emails and generated ${suggestionCount} suggestions.\n\nCheck the **Email Insights** panel for details.`;
+            } else {
+              chatMessage = `Found ${emailCount} prioritized emails.\n\nCheck the **Email Insights** panel for details. (Analysis in progress...)`;
+            }
           }
 
           setMessages(prev => prev.slice(0, -1).concat([{

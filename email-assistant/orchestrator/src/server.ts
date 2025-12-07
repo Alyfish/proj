@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { runBatchForUser } from './runBatch';
@@ -74,7 +77,9 @@ app.post('/api/process', async (req: Request, res: Response) => {
         });
 
         const suggestions = Array.isArray(batchResult) ? batchResult : batchResult.suggestions;
-        const context = Array.isArray(batchResult) ? undefined : batchResult.context;
+        const context = (Array.isArray(batchResult) ? undefined : batchResult.context) as any;
+        const langGraphOutput = (batchResult as any).langGraphOutput; // Extract LangGraph output
+
 
         // Fetch priorities and analyses from database for the latest run
         const latestRun = db.prepare(`
@@ -84,74 +89,51 @@ app.post('/api/process', async (req: Request, res: Response) => {
             LIMIT 1
         `).get(userId) as { id: number } | undefined;
 
-        // Fetch email priorities
-        const priorities = db.prepare(`
-            SELECT id as emailId, priority, '' as reason
-            FROM emails 
-            WHERE user_id = ? 
-            ORDER BY received_at DESC 
-            LIMIT 50
-        `).all(userId) as EmailPriority[];
+        // Legacy Agent Output Handling (Removed)
+        // LangGraph now handles this logic. We don't need to separately fetch priorities, analyses, or suggestions from DB
+        // as they are either returned by the agent or essentially replaced by the single-pass analysis.
 
-        // Enrich priorities with context reasons
-        if (context) {
-            priorities.forEach(p => {
-                const goalIds = context.emailGoalRelevance.get(p.emailId);
-                if (goalIds && goalIds.length > 0) {
-                    const goals = context.activeGoals.filter(g => goalIds.includes(g.id!));
-                    const bestGoal = goals.sort((a, b) => b.confidence - a.confidence)[0];
-                    if (bestGoal) {
-                        p.reason = `Related to: ${bestGoal.goalText}`;
-                    }
+        const priorities: EmailPriority[] = []; // Will be populated from recentEmails
+        const analyses: EmailAnalysis[] = [];   // LangGraph produces a summary, not per-email analysis objects
+
+        // Get recent emails from this run
+        // For LangGraph integration: fetch the emails that were just processed
+        let recentEmails: any[] = [];
+
+        // First, try to get emails from the current run (just processed)
+        const currentRunEmails = db.prepare(`
+            SELECT id, subject, snippet, sender, received_at as receivedAt, priority
+            FROM emails
+            WHERE user_id = ?
+            AND created_at >= datetime('now', '-5 minutes')
+            ORDER BY 
+                CASE priority
+                    WHEN 'high' THEN 1
+                    WHEN 'medium' THEN 2
+                    WHEN 'low' THEN 3
+                    ELSE 4
+                END,
+                received_at DESC
+            LIMIT 5
+        `).all(userId) as any[];
+
+        if (currentRunEmails.length > 0) {
+            recentEmails = currentRunEmails;
+
+            // Populate priorities list from the recent emails for stats/UI
+            recentEmails.forEach(email => {
+                if (email.priority && email.priority !== 'low') {
+                    priorities.push({
+                        emailId: email.id,
+                        user_id: userId,
+                        priority: email.priority,
+                        created_at: new Date(), // approximate
+                        updated_at: new Date()
+                    } as any);
                 }
             });
-        }
-
-        // Fetch analyses
-        const analyses = db.prepare(`
-            SELECT id as emailId, analysis 
-            FROM emails 
-            WHERE user_id = ? AND analysis IS NOT NULL
-            ORDER BY received_at DESC 
-            LIMIT 50
-        `).all(userId).map((row: any) => {
-            const parsed = JSON.parse(row.analysis);
-            return {
-                emailId: row.emailId,
-                summary: parsed.summary || '',
-                actionItems: parsed.actions?.map((a: any) => a.description) || [],
-                deadline: parsed.actions?.[0]?.dueDate,
-                entities: parsed.entities || [],
-                relevance: parsed.relevance,
-                travelDetails: parsed.travelDetails,
-                answer: parsed.answer,
-                key_facts: parsed.key_facts,
-                structuredEntities: parsed.structuredEntities
-            } as any;
-        });
-
-        // Prefer to show emails that were actually analyzed and most relevant to the query
-        const rankedAnalysisIds = analyses
-            .sort((a: any, b: any) => (b.relevance ?? 0) - (a.relevance ?? 0))
-            .map((a: any) => a.emailId);
-
-        let recentEmails: any[] = [];
-        if (rankedAnalysisIds.length > 0) {
-            const placeholders = rankedAnalysisIds.slice(0, 8).map(() => '?').join(',');
-            recentEmails = db.prepare(`
-                SELECT id, subject, snippet, sender, received_at as receivedAt, priority
-                FROM emails
-                WHERE user_id = ?
-                AND id IN (${placeholders})
-            `).all(userId, ...rankedAnalysisIds.slice(0, 8)) as any[];
-            // Preserve original relevance order
-            const orderMap = new Map<string, number>();
-            rankedAnalysisIds.slice(0, 8).forEach((id: string, idx: number) => orderMap.set(id, idx));
-            recentEmails.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
-        }
-
-        // Fallback to latest emails if no analyses yet
-        if (recentEmails.length === 0) {
+        } else {
+            // Fallback to latest emails if no analyses yet
             recentEmails = db.prepare(`
                 SELECT id, subject, snippet, sender, received_at as receivedAt, priority
                 FROM emails
@@ -165,19 +147,24 @@ app.post('/api/process', async (req: Request, res: Response) => {
         const result: EmailProcessingResult = {
             priorities,
             analyses,
-            suggestions: suggestions.map(s => ({
-                type: s.type === 'task' ? 'action' : s.type,
+            suggestions: suggestions.map((s: any) => ({
+                type: s.type || 'action',
                 priority: s.priority === 'high' ? 1 : s.priority === 'medium' ? 2 : 3,
                 title: s.title,
                 description: s.details,
-                relatedEmailIds: s.sourceEmailId ? [s.sourceEmailId] : []
+                relatedEmailIds: []
             })),
             processedAt: new Date(),
             recentEmails,
             searchQuery: intent.normalizedQuery
         };
 
-        const textOutput = textFormatter.formatResult(result);
+        let textOutput = "";
+        if (langGraphOutput) {
+            textOutput = langGraphOutput;
+        } else {
+            textOutput = textFormatter.formatResult(result);
+        }
         const quickStatus = textFormatter.formatQuickStatus(
             priorities.length,
             suggestions.length
@@ -214,8 +201,8 @@ app.post('/api/process', async (req: Request, res: Response) => {
                 suggestions,
                 intent: intent.intent,
                 query: intent.normalizedQuery,
-                activeGoals: context?.activeGoals || [],
-                emailGoalRelevance: context ? Object.fromEntries(context.emailGoalRelevance) : {}
+                activeGoals: (context && context.activeGoals) || [],
+                emailGoalRelevance: (context && context.emailGoalRelevance) ? Object.fromEntries(context.emailGoalRelevance) : {}
             }
         });
 

@@ -1,8 +1,3 @@
-import { EmailRetrievalAgent } from '../../agents/gmail/src/retrievalAgent';
-import { ContextAgent } from '../../agents/context/src/contextAgent';
-import { PrioritizationAgent } from '../../agents/prioritizer/src/prioritizationAgent';
-import { AnalysisAgent } from '../../agents/analyzer/src/analysisAgent';
-import { SuggestionAgent } from '../../agents/suggester/src/suggestionAgent';
 import { db } from '@email-assistant/common/src/db';
 import { EmailMetadata } from '@email-assistant/common/src/types';
 
@@ -19,121 +14,84 @@ export async function runBatchForUser(
     const runId = runResult.lastInsertRowid;
 
     try {
-        // 1. Retrieval
-        const retrievalAgent = new EmailRetrievalAgent();
-        const retrievalResult = await retrievalAgent.run({
-            userId,
-            searchQuery: opts?.searchQuery,
-            maxResults: opts?.maxRetrieve ?? (opts?.searchQuery ? 200 : 50),
-            forceAll: !!opts?.searchQuery, // search intent: ignore last-run window
-        });
+        console.log(`[runBatch] Invoking LangGraph Agent for query: "${opts?.searchQuery || ''}"`);
 
-        let workingEmails: EmailMetadata[] = retrievalResult.emails;
+        // Dynamic import to handle potential ESM/CJS interop issues if any, or just standard import
+        const { runAgent } = require('@email-assistant/agent-langgraph');
 
-        // If a search query was provided but nothing new was fetched, fall back to cached emails
-        if (workingEmails.length === 0 && opts?.searchQuery) {
-            const rows = db.prepare(`
-                SELECT id, thread_id as threadId, sender as "from", subject, snippet, received_at as receivedAt, labels
-                FROM emails
-                WHERE user_id = ? AND received_at >= datetime('now', '-30 days')
-                ORDER BY received_at DESC
-                LIMIT ?
-            `).all(userId, opts?.maxRetrieve ?? 250) as any[];
+        const result = await runAgent(opts?.searchQuery || "Summarize recent important emails");
 
-            workingEmails = rows.map(row => ({
-                id: row.id,
-                threadId: row.threadId,
-                from: row.from,
-                to: [],
-                subject: row.subject,
-                snippet: row.snippet,
-                receivedAt: row.receivedAt,
-                labels: row.labels ? JSON.parse(row.labels) : [],
-            }));
-            console.log(`[runBatch] Using ${workingEmails.length} cached emails for query processing.`);
+        // 1. Persist Fetched Emails
+        const emails = result.emails || [];
+        console.log(`[runBatch] Graph returned ${emails.length} emails. Persisting to DB...`);
+
+        const insertStmt = db.prepare(`
+            INSERT OR IGNORE INTO emails (id, user_id, thread_id, sender, subject, snippet, received_at, labels, processed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+        `);
+
+        for (const email of emails) {
+            // Map LangGraph Email to DB schema
+            // LangGraph Email: { id, subject, from, to, timestamp, snippet, body, labels }
+            // DB expectations: thread_id (missing in simplified type, use id or blank), received_at (ISO string)
+
+            insertStmt.run(
+                email.id,
+                userId,
+                email.id, // simplified: usage id as thread_id fallback
+                email.from,
+                email.subject,
+                email.snippet,
+                new Date(email.timestamp).toISOString(),
+                JSON.stringify(email.labels || [])
+            );
         }
 
-        if (workingEmails.length === 0) {
-            console.log('No emails to process (new or cached).');
-            db.prepare("UPDATE runs SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?").run(runId);
-            return [];
-        }
+        // 2. Persist Priorities
+        const prioritized = result.prioritized_emails || [];
+        console.log(`[runBatch] Marking ${prioritized.length} emails as HIGH priority.`);
 
-        // 2. Context Analysis
-        const contextAgent = new ContextAgent();
-        const contextResult = await contextAgent.run({
-            userId,
-            emails: workingEmails
-        });
-
-        // 3. Prioritization
-        const prioritizationAgent = new PrioritizationAgent();
-        const prioritized = await prioritizationAgent.run({
-            userId,
-            emails: workingEmails,
-            context: contextResult,
-            searchQuery: opts?.searchQuery,
-        });
-
-        // 3b. Thread grouping: keep only the most recent email per thread to avoid redundant analyses
-        const byThread = new Map<string, EmailMetadata & { priority: 'high' | 'medium' | 'low' }>();
-        for (const email of prioritized.emails) {
-            if (!email.threadId) {
-                byThread.set(email.id, email);
-                continue;
+        const priorityStmt = db.prepare('UPDATE emails SET priority = ? WHERE id = ?');
+        const updateTransaction = db.transaction((ids: string[]) => {
+            // Reset all processed in this batch/window? 
+            // Ideally we only update the ones returned as prioritized.
+            // We set them to 'high'. The rest remain as is (or default low/medium from previous?).
+            // For now, explicitly marking the selected ones as high.
+            for (const id of ids) {
+                priorityStmt.run('high', id);
             }
-            const existing = byThread.get(email.threadId);
-            if (!existing) {
-                byThread.set(email.threadId, email);
-            } else {
-                const existingDate = new Date(existing.receivedAt).getTime();
-                const currentDate = new Date(email.receivedAt).getTime();
-                if (currentDate > existingDate) {
-                    byThread.set(email.threadId, email);
-                }
-            }
-        }
-        const dedupedEmails = Array.from(byThread.values());
-
-        // Quick mode: return early with prioritized emails only
-        if (opts?.quickMode) {
-            console.log(`[runBatch] Quick mode: returning ${dedupedEmails.length} prioritized emails without analysis`);
-            db.prepare("UPDATE runs SET status = 'completed', completed_at = CURRENT_TIMESTAMP, metadata = ? WHERE id = ?")
-                .run(JSON.stringify({ quickMode: true, emailCount: dedupedEmails.length }), runId);
-
-            return {
-                suggestions: [],
-                context: contextResult,
-                quickMode: true
-            };
-        }
-
-        // 4. Analysis
-        const analysisAgent = new AnalysisAgent();
-        const analyzed = await analysisAgent.run({
-            userId,
-            emails: dedupedEmails,
-            searchQuery: opts?.searchQuery,
-            maxAnalyze: opts?.maxAnalyze ?? 5,
-            intent: opts?.intent ?? 'search',
         });
+        updateTransaction(prioritized.map((e: any) => e.id));
 
-        // 5. Suggestions
-        const suggestionAgent = new SuggestionAgent();
-        const suggestionResult = await suggestionAgent.run({
-            userId,
-            analyses: analyzed.analyses,
-            intent: opts?.intent ?? 'search',
-        });
+        // 3. Persist Analysis/Summary
+        // The LangGraph returns a global `analysis_result` string.
+        // We can store this in the `runs` table metadata or return it directly.
+        // The UI expects per-email analysis for cards.
+        // We can create a "fake" analysis entry for the top prioritized email to show the summary? 
+        // OR simply return it in the text output.
+
+        const metadata = {
+            suggestionsCount: result.suggestions?.length || 0,
+            langGraphOutput: result.analysis_result,
+            keywords: result.keywords
+        };
 
         // 6. Record Completion
         db.prepare("UPDATE runs SET status = 'completed', completed_at = CURRENT_TIMESTAMP, metadata = ? WHERE id = ?")
-            .run(JSON.stringify({ suggestionsCount: suggestionResult.suggestions.length }), runId);
+            .run(JSON.stringify(metadata), runId);
 
-        console.log(`=== Batch Run Completed. Generated ${suggestionResult.suggestions.length} suggestions. ===\n`);
+        console.log(`=== Batch Run Completed (LangGraph). Generated ${result.suggestions?.length || 0} suggestions. ===\n`);
+
+        // Return structure compatible with server.ts expectation, plus the new output
         return {
-            suggestions: suggestionResult.suggestions,
-            context: contextResult
+            suggestions: result.suggestions?.map((s: any) => ({
+                type: 'task',
+                title: s.title,
+                details: s.details,
+                priority: s.priority
+            })) || [],
+            context: undefined, // Context is internal to graph
+            langGraphOutput: result.analysis_result
         };
 
     } catch (error) {

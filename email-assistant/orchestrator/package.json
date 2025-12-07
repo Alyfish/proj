@@ -3,14 +3,15 @@
     "version": "0.1.0",
     "main": "index.ts",
     "dependencies": {
+        "@email-assistant/agent-langgraph": "^0.1.0",
         "@email-assistant/common": "*",
         "@email-assistant/sidebar-integration": "*",
-        "@types/uuid": "^10.0.0",
-        "uuid": "^13.0.0",
-        "express": "^4.18.2",
-        "cors": "^2.8.5",
+        "@types/cors": "^2.8.17",
         "@types/express": "^4.17.21",
-        "@types/cors": "^2.8.17"
+        "@types/uuid": "^10.0.0",
+        "cors": "^2.8.5",
+        "express": "^4.18.2",
+        "uuid": "^13.0.0"
     },
     "scripts": {
         "start": "ts-node src/index.ts",

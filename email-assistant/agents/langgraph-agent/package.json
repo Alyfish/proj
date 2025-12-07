@@ -1,0 +1,23 @@
+{
+    "name": "@email-assistant/agent-langgraph",
+    "version": "0.1.0",
+    "main": "src/index.ts",
+    "scripts": {
+        "build": "tsc",
+        "start": "ts-node src/index.ts"
+    },
+    "dependencies": {
+        "@email-assistant/common": "*",
+        "@email-assistant/agent-gmail": "*",
+        "langchain": "^0.1.0",
+        "@langchain/langgraph": "^0.0.10",
+        "@langchain/openai": "^0.0.10",
+        "zod": "^3.22.0",
+        "dotenv": "^16.0.0"
+    },
+    "devDependencies": {
+        "typescript": "^5.0.0",
+        "@types/node": "^20.0.0",
+        "ts-node": "^10.0.0"
+    }
+}

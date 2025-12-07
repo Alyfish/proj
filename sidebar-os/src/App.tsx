@@ -689,6 +689,14 @@ export default function App() {
 
     const userInput = input.trim();
 
+
+    // Check for clear command
+    if (userInput.toLowerCase() === 'clear' || userInput.toLowerCase() === 'clear chat') {
+      setMessages([])
+      setInput('')
+      return
+    }
+
     // Add user message
     setMessages(prev => [...prev, { role: 'user', content: userInput }])
     setInput('');

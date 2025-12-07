@@ -9,6 +9,7 @@ const llm = new ChatOpenAI({
 });
 
 export const analyzerNode = async (state: AgentState): Promise<Partial<AgentState>> => {
+    console.log(`\n[Analyzer] 🚀 STARTING SHALLOW ANALYSIS...`);
     const { prioritized_emails, user_query } = state;
 
     if (prioritized_emails.length === 0) {

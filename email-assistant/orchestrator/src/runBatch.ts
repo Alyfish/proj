@@ -26,8 +26,9 @@ export async function runBatchForUser(
         console.log(`[runBatch] Graph returned ${emails.length} emails. Persisting to DB...`);
 
         const insertStmt = db.prepare(`
-            INSERT OR IGNORE INTO emails (id, user_id, thread_id, sender, subject, snippet, received_at, labels, processed)
+            INSERT INTO emails (id, user_id, thread_id, sender, subject, snippet, received_at, labels, processed)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+            ON CONFLICT(id) DO UPDATE SET created_at = CURRENT_TIMESTAMP
         `);
 
         for (const email of emails) {
@@ -84,14 +85,28 @@ export async function runBatchForUser(
 
         // Return structure compatible with server.ts expectation, plus the new output
         return {
-            suggestions: result.suggestions?.map((s: any) => ({
-                type: 'task',
-                title: s.title,
-                details: s.details,
-                priority: s.priority
-            })) || [],
+            // LangGraph suggestions can be objects or plain strings (deep analyzer). Normalize for the UI.
+            suggestions: (result.suggestions || []).map((s: any) => {
+                if (typeof s === 'string') {
+                    // Deep analyzer returns string bullets; show them as info cards.
+                    return {
+                        type: 'info',
+                        title: s,
+                        details: s,
+                        priority: 'medium'
+                    };
+                }
+                return {
+                    type: s.type || 'task',
+                    title: s.title || s.details || 'Suggestion',
+                    details: s.details || s.description || s.title || '',
+                    priority: s.priority || 'medium'
+                };
+            }),
             context: undefined, // Context is internal to graph
-            langGraphOutput: result.analysis_result
+            langGraphOutput: result.analysis_result,
+            // Return the actual prioritized emails from this run
+            prioritizedEmails: result.prioritized_emails || []
         };
 
     } catch (error) {

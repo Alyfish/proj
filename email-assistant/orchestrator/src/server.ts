@@ -97,43 +97,37 @@ app.post('/api/process', async (req: Request, res: Response) => {
         const analyses: EmailAnalysis[] = [];   // LangGraph produces a summary, not per-email analysis objects
 
         // Get recent emails from this run
-        // For LangGraph integration: fetch the emails that were just processed
+        // For LangGraph integration: use the prioritized emails from the current run
         let recentEmails: any[] = [];
 
-        // First, try to get emails from the current run (just processed)
-        const currentRunEmails = db.prepare(`
-            SELECT id, subject, snippet, sender, received_at as receivedAt, priority
-            FROM emails
-            WHERE user_id = ?
-            AND created_at >= datetime('now', '-5 minutes')
-            ORDER BY 
-                CASE priority
-                    WHEN 'high' THEN 1
-                    WHEN 'medium' THEN 2
-                    WHEN 'low' THEN 3
-                    ELSE 4
-                END,
-                received_at DESC
-            LIMIT 5
-        `).all(userId) as any[];
+        // Use the prioritized emails returned directly from LangGraph
+        const prioritizedFromRun = (batchResult as any).prioritizedEmails || [];
 
-        if (currentRunEmails.length > 0) {
-            recentEmails = currentRunEmails;
+        if (prioritizedFromRun.length > 0) {
+            // Map LangGraph Email format to the format expected by UI
+            recentEmails = prioritizedFromRun.slice(0, 5).map((email: any) => ({
+                id: email.id,
+                subject: email.subject,
+                snippet: email.snippet || email.body?.substring(0, 100) || '',
+                sender: email.from,
+                receivedAt: email.timestamp,
+                priority: 'high' // These are the prioritized ones
+            }));
 
-            // Populate priorities list from the recent emails for stats/UI
+            // Populate priorities list from the prioritized emails for stats/UI
             recentEmails.forEach(email => {
-                if (email.priority && email.priority !== 'low') {
-                    priorities.push({
-                        emailId: email.id,
-                        user_id: userId,
-                        priority: email.priority,
-                        created_at: new Date(), // approximate
-                        updated_at: new Date()
-                    } as any);
-                }
+                priorities.push({
+                    emailId: email.id,
+                    user_id: userId,
+                    priority: 'high',
+                    created_at: new Date(),
+                    updated_at: new Date()
+                } as any);
             });
+
+            console.log(`[API] Using ${recentEmails.length} prioritized emails from LangGraph run.`);
         } else {
-            // Fallback to latest emails if no analyses yet
+            // Fallback to latest emails from DB if no prioritized emails
             recentEmails = db.prepare(`
                 SELECT id, subject, snippet, sender, received_at as receivedAt, priority
                 FROM emails
@@ -141,19 +135,33 @@ app.post('/api/process', async (req: Request, res: Response) => {
                 ORDER BY received_at DESC
                 LIMIT 5
             `).all(userId) as any[];
+            console.log(`[API] Fallback: Using ${recentEmails.length} recent emails from DB.`);
         }
 
         // Format as text
         const result: EmailProcessingResult = {
             priorities,
             analyses,
-            suggestions: suggestions.map((s: any) => ({
-                type: s.type || 'action',
-                priority: s.priority === 'high' ? 1 : s.priority === 'medium' ? 2 : 3,
-                title: s.title,
-                description: s.details,
-                relatedEmailIds: []
-            })),
+            suggestions: suggestions.map((s: any) => {
+                // Handle both string format (from deep analyzer) and object format (from shallow analyzer)
+                if (typeof s === 'string') {
+                    return {
+                        type: 'action',
+                        priority: 2,
+                        title: s,
+                        description: '',
+                        relatedEmailIds: []
+                    };
+                } else {
+                    return {
+                        type: s.type || 'action',
+                        priority: s.priority === 'high' ? 1 : s.priority === 'medium' ? 2 : 3,
+                        title: s.title || '',
+                        description: s.details || s.description || '',
+                        relatedEmailIds: []
+                    };
+                }
+            }),
             processedAt: new Date(),
             recentEmails,
             searchQuery: intent.normalizedQuery

@@ -76,12 +76,32 @@ Env: add `OPENAI_API_KEY` to `email-assistant/.env`. Do NOT commit Gmail `creden
   - Modes: collapsed, expanded, sidepanel
   - Cmd+1 toggles collapsed/expanded in the desktop build (wired via Tauri)
   - Positions for collapsed/expanded/sidepanel persist; reset helpers included in UI
-- Email Assistant pipeline
+- Email Assistant pipeline (LangGraph-based)
+  - **Intelligent Router**: Automatically classifies queries into "shallow" (simple lookups) or "deep" (complex synthesis) analysis modes
+  - **Context Setter**: Converts natural language queries into optimized Gmail search queries
   - Gmail retrieval with intent-aware query refinement and 30d recency default
   - Prioritization with query-aware boosts and thread dedupe
+  - **Dual Analysis Modes**:
+    - **Shallow Analysis**: Fast, factual lookups for simple queries (e.g., "Find my flight", "When is the meeting?")
+    - **Deep Analysis**: Comprehensive synthesis for complex queries (e.g., "Summarize investment opportunities", "Analyze project risks") with structured outputs including key insights, entities, and actionable suggestions
   - Analysis with full-body decoding, embeddings, and domain signals (travel parsing: PNR/legs)
-  - Suggestions: domain-aware “trip summary” plus concise next steps
+  - Suggestions: domain-aware "trip summary" plus concise next steps
   - UI: relevance-ranked email list, travel icon on trip emails, longer timeout + retry on first-run fetch
+  - **Clear Feature**: Type "clear" or "clear chat" to reset the conversation
+
+## LangGraph Email Assistant Architecture
+
+The email assistant uses LangGraph to orchestrate a sophisticated workflow:
+
+1. **Context Setter**: Interprets user queries and generates optimized Gmail search queries
+2. **Router**: Intelligently routes queries to either shallow or deep analysis based on complexity
+3. **Gmail Fetcher**: Retrieves emails matching the search query
+4. **Prioritizer**: Scores and ranks emails by relevance to the user's intent
+5. **Reviewer**: Validates prioritization decisions and can loop back for refinement
+6. **Analyzer** (Shallow): Fast analysis for simple, factual queries
+7. **Deep Analyzer**: Comprehensive synthesis for complex queries with structured outputs (summary, key insights, entities, suggestions)
+
+The workflow automatically adapts to query complexity, ensuring efficient processing for simple lookups while providing rich, synthesized analysis for complex research tasks.
 
 ## File Map
 
@@ -89,6 +109,9 @@ Env: add `OPENAI_API_KEY` to `email-assistant/.env`. Do NOT commit Gmail `creden
 - `sidebar-os/src/codex.ts` — mock Codex service for demo
 - `sidebar-os/src-tauri` — Tauri config and Rust entrypoints
 - `email-assistant/` — backend monorepo (agents, orchestrator, common)
+  - `agents/langgraph-agent/` — LangGraph-based email processing workflow
+  - `agents/langgraph-agent/src/nodes/` — workflow nodes (router, analyzer, deep_analyzer, etc.)
+  - `agents/langgraph-agent/src/prompts.ts` — LLM prompts for all nodes
 
 ## Customization Tips
 

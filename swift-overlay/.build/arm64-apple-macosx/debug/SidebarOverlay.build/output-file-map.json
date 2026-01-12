@@ -1,0 +1,47 @@
+{
+  "": {
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/master.swiftdeps"
+  },
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/DraggableWebView.swift": {
+    "dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.d",
+    "object": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o",
+    "swiftmodule": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView~partial.swiftmodule",
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swiftdeps"
+  },
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/HotkeyManager.swift": {
+    "dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.d",
+    "object": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o",
+    "swiftmodule": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swiftdeps"
+  },
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayApp.swift": {
+    "dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.d",
+    "object": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o",
+    "swiftmodule": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swiftdeps"
+  },
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindow.swift": {
+    "dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.d",
+    "object": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o",
+    "swiftmodule": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow~partial.swiftmodule",
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swiftdeps"
+  },
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindowController.swift": {
+    "dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.d",
+    "object": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o",
+    "swiftmodule": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController~partial.swiftmodule",
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swiftdeps"
+  },
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/PillView.swift": {
+    "dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.d",
+    "object": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o",
+    "swiftmodule": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView~partial.swiftmodule",
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swiftdeps"
+  },
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/WebViewManager.swift": {
+    "dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.d",
+    "object": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o",
+    "swiftmodule": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swiftdeps"
+  }
+}

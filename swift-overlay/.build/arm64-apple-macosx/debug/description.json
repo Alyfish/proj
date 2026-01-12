@@ -1,0 +1,340 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.SidebarOverlay-arm64-apple-macosx15.0-debug.module" : {
+      "executable" : "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "fileList" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources",
+      "importPath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/DraggableWebView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/HotkeyManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindow.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindowController.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/PillView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/WebViewManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "SidebarOverlay",
+      "moduleOutputPath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules/SidebarOverlay.swiftmodule",
+      "objects" : [
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx13.0",
+        "-enable-batch-mode",
+        "-index-store-path",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j12",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-module-cache-path",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "SidebarOverlay_main",
+        "-color-diagnostics",
+        "-swift-version",
+        "5",
+        "-F",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-sdk",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "swift_overlay"
+      ],
+      "outputFileMapPath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules/SidebarOverlay.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/DraggableWebView.swift",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/HotkeyManager.swift",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayApp.swift",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindow.swift",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindowController.swift",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/PillView.swift",
+        "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/WebViewManager.swift"
+      ],
+      "tempsPath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "SidebarOverlay" : [
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "-module-name",
+      "SidebarOverlay",
+      "-package-name",
+      "swift_overlay",
+      "-incremental",
+      "-c",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/DraggableWebView.swift",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/HotkeyManager.swift",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayApp.swift",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindow.swift",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindowController.swift",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/PillView.swift",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/WebViewManager.swift",
+      "-I",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx13.0",
+      "-enable-batch-mode",
+      "-index-store-path",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j12",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-module-cache-path",
+      "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "SidebarOverlay_main",
+      "-color-diagnostics",
+      "-swift-version",
+      "5",
+      "-F",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-sdk",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "swift_overlay",
+      "-driver-use-frontend-path",
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "SidebarOverlay" : [
+
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "enableAllTraits" : false
+  },
+  "writeCommands" : {
+    "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay-entitlement.plist"
+    },
+    "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/DraggableWebView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/HotkeyManager.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayApp.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindow.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindowController.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/PillView.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/WebViewManager.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources"
+    },
+    "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.product/Objects.LinkFileList"
+    },
+    "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+    }
+  }
+}

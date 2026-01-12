@@ -7,7 +7,7 @@ export type VoicePipelineResult = {
   audioUrl: string
 }
 
-const API_KEY = import.meta.env.VITE_OPENAI_API_KEY as string | undefined
+const API_KEY = (import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.OPENAI_API_KEY) as string | undefined
 
 const requireKey = () => {
   if (!API_KEY) throw new Error('Missing VITE_OPENAI_API_KEY')
@@ -101,7 +101,7 @@ export async function runVoicePipeline(
 
 export function playAudio(url: string) {
   const audio = new Audio(url)
-  audio.play().catch(() => {})
+  audio.play().catch(() => { })
   return audio
 }
 

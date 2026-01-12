@@ -1,0 +1,81 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "PackageStructure": ["<PackageStructure>"]
+  "SidebarOverlay-arm64-apple-macosx15.0-debug.exe": ["<SidebarOverlay-arm64-apple-macosx15.0-debug.exe>"]
+  "SidebarOverlay-arm64-apple-macosx15.0-debug.module": ["<SidebarOverlay-arm64-apple-macosx15.0-debug.module>"]
+  "main": ["<SidebarOverlay-arm64-apple-macosx15.0-debug.exe>","<SidebarOverlay-arm64-apple-macosx15.0-debug.module>"]
+  "test": ["<SidebarOverlay-arm64-apple-macosx15.0-debug.exe>","<SidebarOverlay-arm64-apple-macosx15.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay":
+    is-mutated: true
+commands:
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay-entitlement.plist"]
+    description: "Write auxiliary file /Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay-entitlement.plist"
+
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/DraggableWebView.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/HotkeyManager.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayApp.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindow.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindowController.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/PillView.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/WebViewManager.swift"]
+    outputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources"]
+    description: "Write auxiliary file /Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources"
+
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o"]
+    outputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.product/Objects.LinkFileList"
+
+  "/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Library/Developer/CommandLineTools/usr/bin/swiftc"]
+    outputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+
+  "<SidebarOverlay-arm64-apple-macosx15.0-debug.exe>":
+    tool: phony
+    inputs: ["<SidebarOverlay-arm64-apple-macosx15.0-debug.exe-CodeSigning>"]
+    outputs: ["<SidebarOverlay-arm64-apple-macosx15.0-debug.exe>"]
+
+  "<SidebarOverlay-arm64-apple-macosx15.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules/SidebarOverlay.swiftmodule"]
+    outputs: ["<SidebarOverlay-arm64-apple-macosx15.0-debug.module>"]
+
+  "C.SidebarOverlay-arm64-apple-macosx15.0-debug.exe":
+    tool: shell
+    inputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.product/Objects.LinkFileList"]
+    outputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/SidebarOverlay"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-L","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug","-o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay","-module-name","SidebarOverlay","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_SidebarOverlay_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.product/Objects.LinkFileList","-target","arm64-apple-macosx13.0","-Xlinker","-add_ast_path","-Xlinker","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules/SidebarOverlay.swiftmodule","-F","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xlinker","-rpath","-Xlinker","/Library/Developer/CommandLineTools/Library/Developer/Frameworks"]
+
+  "C.SidebarOverlay-arm64-apple-macosx15.0-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay-entitlement.plist"]
+    outputs: ["<SidebarOverlay-arm64-apple-macosx15.0-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/SidebarOverlay"
+    args: ["codesign","--force","--sign","-","--entitlements","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay-entitlement.plist","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay"]
+
+  "C.SidebarOverlay-arm64-apple-macosx15.0-debug.module":
+    tool: shell
+    inputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/DraggableWebView.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/HotkeyManager.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayApp.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindow.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/OverlayWindowController.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/PillView.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/WebViewManager.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources"]
+    outputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/DraggableWebView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/HotkeyManager.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayApp.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindow.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/OverlayWindowController.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/PillView.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/WebViewManager.swift.o","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules/SidebarOverlay.swiftmodule"]
+    description: "Compiling Swift Module 'SidebarOverlay' (7 sources)"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-module-name","SidebarOverlay","-emit-dependencies","-emit-module","-emit-module-path","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules/SidebarOverlay.swiftmodule","-output-file-map","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/output-file-map.json","-incremental","-c","@/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/SidebarOverlay.build/sources","-I","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx13.0","-enable-batch-mode","-index-store-path","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j12","-DSWIFT_PACKAGE","-DDEBUG","-module-cache-path","/Users/aly/Desktop/oslayer/test/swift-overlay/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","SidebarOverlay_main","-color-diagnostics","-swift-version","5","-F","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xcc","-isysroot","-Xcc","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-Xcc","-fPIC","-Xcc","-g","-package-name","swift_overlay"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/aly/Desktop/oslayer/test/swift-overlay/Sources/","/Users/aly/Desktop/oslayer/test/swift-overlay/Package.swift","/Users/aly/Desktop/oslayer/test/swift-overlay/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

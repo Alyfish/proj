@@ -208,6 +208,19 @@ export default function App() {
   const dashboardRef = useRef<HTMLDivElement | null>(null)
   const [dashboardSelectedProject, setDashboardSelectedProject] = useState<string | null>(null)
 
+  // Investment Scout state
+  const [showInvestmentPanel, setShowInvestmentPanel] = useState(false)
+  const [investmentDeals, setInvestmentDeals] = useState<Array<{
+    id: string
+    company_name: string
+    signal_score?: number
+    action?: string
+    min_check?: number
+    deadline?: string
+    status: string
+  }>>([])
+  const INVESTMENT_API = 'http://localhost:3003'
+
   // Collapsed pill interactions
   const [collapsedHover, setCollapsedHover] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
@@ -1482,6 +1495,20 @@ export default function App() {
                 <span className="text-white/90 font-medium">{selectedProject}</span>
               </div>
 
+              {/* Investment Scout Button */}
+              <div
+                className="context-pill flex items-center gap-1.5 hover:border-emerald-500/30 cursor-pointer bg-emerald-500/10 border-emerald-500/20"
+                onClick={() => setShowInvestmentPanel(true)}
+              >
+                <span className="text-emerald-400">💰</span>
+                <span className="text-emerald-300 font-medium">Deal Flow</span>
+                {investmentDeals.length > 0 && (
+                  <span className="px-1.5 py-0.5 text-[10px] bg-emerald-500/30 rounded-full text-emerald-300">
+                    {investmentDeals.length}
+                  </span>
+                )}
+              </div>
+
               {/* Model Selector */}
               <div className="relative" ref={modelMenuRef}>
                 <div
@@ -1776,6 +1803,133 @@ export default function App() {
                       </section>
                     </div>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Investment Scout Panel */}
+        <AnimatePresence>
+          {showInvestmentPanel && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-8"
+              onClick={() => setShowInvestmentPanel(false)}
+            >
+              <div
+                className="w-full max-w-2xl h-[70vh] bg-[#0d0d0d] border border-emerald-500/20 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/30">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">💰</span>
+                    <h2 className="text-lg font-semibold text-white">Deal Flow</h2>
+                    <span className="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-300 rounded-full">Investment Scout</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`${INVESTMENT_API}/test-deal`, { method: 'POST' })
+                          const data = await res.json()
+                          if (data.success) {
+                            // Refresh deals
+                            const dealsRes = await fetch(`${INVESTMENT_API}/opportunities`)
+                            const deals = await dealsRes.json()
+                            setInvestmentDeals(deals)
+                          }
+                        } catch (err) {
+                          console.error('Failed to create test deal:', err)
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg transition"
+                    >
+                      + Test Deal
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`${INVESTMENT_API}/opportunities`)
+                          const deals = await res.json()
+                          setInvestmentDeals(deals)
+                        } catch (err) {
+                          console.error('Failed to fetch deals:', err)
+                        }
+                      }}
+                      className="p-1.5 text-white/40 hover:text-white/70 transition"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                      </svg>
+                    </button>
+                    <button onClick={() => setShowInvestmentPanel(false)} className="text-white/40 hover:text-white p-1">✕</button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-4">
+                  {investmentDeals.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <div className="text-5xl mb-4">📭</div>
+                      <div className="text-white/60 text-lg">No opportunities yet</div>
+                      <div className="text-white/40 text-sm mt-2">
+                        Click "+ Test Deal" to create a mock investment opportunity
+                      </div>
+                      <div className="text-white/30 text-xs mt-4 max-w-sm">
+                        Note: Make sure Investment Scout server is running on port 3003
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {investmentDeals.map(deal => (
+                        <div
+                          key={deal.id}
+                          className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-emerald-500/30 transition cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center text-lg font-bold text-white/60">
+                                {deal.company_name[0]}
+                              </div>
+                              <div>
+                                <div className="font-medium text-white">{deal.company_name}</div>
+                                <div className="text-xs text-white/40">
+                                  {deal.min_check && `$${deal.min_check.toLocaleString()} min`}
+                                  {deal.deadline && ` • Closes ${deal.deadline}`}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {deal.signal_score !== undefined && (
+                                <div className={`text-lg font-bold ${deal.signal_score >= 80 ? 'text-emerald-400' :
+                                    deal.signal_score >= 60 ? 'text-yellow-400' : 'text-red-400'
+                                  }`}>
+                                  {deal.signal_score}
+                                </div>
+                              )}
+                              {deal.action && (
+                                <span className={`px-2 py-1 text-[10px] rounded ${deal.action === 'MUST READ' ? 'bg-emerald-500/20 text-emerald-300' :
+                                    deal.action === 'INTERESTING' ? 'bg-yellow-500/20 text-yellow-300' :
+                                      'bg-red-500/20 text-red-300'
+                                  }`}>
+                                  {deal.action}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t border-white/5 bg-black/30 text-center text-xs text-white/30">
+                  Connected to Investment Scout API • ws://localhost:3003
                 </div>
               </div>
             </motion.div>

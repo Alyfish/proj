@@ -22,12 +22,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: OverlayWindowController?
     private var hotkeyManager: HotkeyManager?
     private var statusItem: NSStatusItem?
+    private var investmentStore: InvestmentStore?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("🚀 Sidebar Overlay starting...")
         
         // Create the overlay window controller
         windowController = OverlayWindowController()
+        
+        // Initialize Investment Store and connect to Python backend
+        investmentStore = InvestmentStore()
+        investmentStore?.connect()
         
         // Set up global hotkey handler
         hotkeyManager = HotkeyManager { [weak self] in

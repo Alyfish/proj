@@ -2,6 +2,12 @@ import { AgentState } from "../state";
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ANALYZER_PROMPT } from "../prompts";
+import * as dotenv from "dotenv";
+import * as path from "path";
+
+// Load .env from project root
+dotenv.config({ path: path.resolve(__dirname, '../../../../../.env') });
+dotenv.config(); // fallback to current working dir .env if present
 
 const llm = new ChatOpenAI({
     modelName: "gpt-4-turbo-preview",

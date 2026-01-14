@@ -17,8 +17,11 @@
     "@openai/agents": "^0.3.0",
     "@tanstack/react-query": "^5.90.5",
     "@tauri-apps/api": "^2.8.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.25.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "tailwind-merge": "^3.4.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

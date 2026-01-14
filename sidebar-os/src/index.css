@@ -2,17 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Ensure dark background throughout */
-body, #root {
+/* =============================================================================
+   LIQUID HUD - Native Glass Mode
+   ============================================================================= 
+   Native NSVisualEffectView provides the blur. React just draws on top.
+*/
+
+html,
+body,
+#root {
   margin: 0;
   padding: 0;
-  background: transparent;
+  background: transparent !important;
   color: #ececec;
   height: 100vh;
-  /* Allow vertical scrolling to prevent UI cut-off */
   overflow-x: hidden;
   overflow-y: auto;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -21,9 +27,73 @@ body, #root {
   box-sizing: border-box;
 }
 
-/* Custom scrollbar for messages area */
+/* =============================================================================
+   LIQUID HUD Components - Minimal backgrounds, let native blur shine
+   ============================================================================= */
+
+/* Main container - nearly transparent */
+.liquid-container {
+  background: rgba(0, 0, 0, 0.1) !important;
+  backdrop-filter: none !important;
+  /* Disable web blur, use native */
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Input bar - subtle tint only */
+.liquid-input {
+  background: rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: none !important;
+}
+
+/* Message area - transparent */
+.liquid-messages {
+  background: transparent !important;
+}
+
+/* Subtle separator */
+.liquid-divider {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* =============================================================================
+   Typography - Clean, readable on glass
+   ============================================================================= */
+
+/* User input - bold, white */
+.liquid-user-text {
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* AI response - regular, slightly muted */
+.liquid-ai-text {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* Context badges */
+.liquid-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* =============================================================================
+   Scrollbar - Thin, subtle
+   ============================================================================= */
+
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -31,16 +101,195 @@ body, #root {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #424242;
-  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* =============================================================================
+   Animations
+   ============================================================================= */
+
+/* Smooth transitions for all interactive elements */
+* {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Apple-style ease */
+}
+
+/* Pill entrance animation */
+@keyframes pillEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.collapsed-pill-enter {
+  animation: pillEnter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Typing indicator */
+@keyframes blink {
+
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: blink 1.4s infinite both;
 }
 
 /* Auto-resize textarea */
 textarea {
   field-sizing: content;
   max-height: 200px;
+}
+
+/* =============================================================================
+   OBSIDIAN GLASS - Command Stream Mode
+   ============================================================================= */
+
+/* The Three-Layer Material Stack */
+.obsidian-glass {
+  /* Layer 1: Heavy blur */
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+
+  /* Layer 2: Sunglasses tint */
+  background: rgba(0, 0, 0, 0.35);
+
+  /* Layer 3: Jewel edge & Shadow */
+  border: 1px solid transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    /* Top highlight */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    /* Bottom shadow */
+    0 20px 50px rgba(0, 0, 0, 0.4);
+  /* Drop shadow */
+  border-radius: 24px;
+}
+
+/* Input Well - The sinking feeling */
+.input-well {
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 16px;
+  border-radius: 0 0 12px 12px;
+  /* Bottom rounding typically */
+}
+
+/* Context Pills - Information chips */
+.context-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: 'SF Pro Text', -apple-system, sans-serif;
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.context-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Nano Pill / "Breathing Gem" Aesthetic */
+.gem-pill {
+  /* Base Layout */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* The "Gem" Material Stack */
+  /* 1. Frosted Glass Base */
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+
+  /* 2. Deep Gradient Overlay (simulated via background-image) */
+  background-image: linear-gradient(to bottom, rgba(59, 130, 246, 0.15), rgba(0, 0, 0, 0.4));
+
+  /* 3. Rim Light & Shadows */
+  /* Inner highlight (top), Inner shadow (bottom), Outer border ring, Drop shadow */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.gem-pill:hover {
+  transform: translateY(-2px) scale(1.02);
+  background-image: linear-gradient(to bottom, rgba(59, 130, 246, 0.25), rgba(0, 0, 0, 0.3));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 8px 20px rgba(0, 0, 0, 0.4),
+    0 0 15px rgba(59, 130, 246, 0.3);
+  /* Glow */
+}
+
+/* Pulsing "Thinking" State */
+@keyframes gem-pulse {
+  0% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+
+  50% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 0 1px rgba(88, 166, 255, 0.3), 0 0 12px 2px rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.gem-pill.thinking {
+  animation: gem-pulse 3s infinite ease-in-out;
+}
+
+/* Typography Overrides */
+.font-mono-cmd {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  letter-spacing: -0.01em;
+}
+
+.font-sans-stream {
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+/* Code block container override */
+.obsidian-code-block {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  font-family: 'SF Mono', monospace;
+  font-size: 0.875rem;
+  color: #e5e7eb;
 }

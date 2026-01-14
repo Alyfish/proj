@@ -5,6 +5,116 @@ use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_store::StoreExt;
 use serde::{Deserialize, Serialize};
 
+// macOS-specific imports for window collection behavior
+#[cfg(target_os = "macos")]
+use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
+#[cfg(target_os = "macos")]
+use cocoa::base::id;
+#[cfg(target_os = "macos")]
+use objc::runtime::Object;
+#[cfg(target_os = "macos")]
+use objc::*;
+
+/// Configures the window to behave as an overlay:
+/// 1. Sets the app to "Accessory" mode (hides Dock icon, prevents space switching)
+/// 2. Uses CanJoinAllSpaces (window visible on ALL desktops simultaneously)
+/// 3. Sets the window level to StatusBar (high z-order)
+/// 4. Enables detection-free mode (hidden from screen recordings)
+#[cfg(target_os = "macos")]
+fn configure_window_behavior(window: &tauri::WebviewWindow) {
+    log::info!("🔧 [macOS] Configuring overlay window behavior...");
+    
+    let result = window.with_webview(|webview| {
+        unsafe {
+            // 1. Force ActivationPolicy to Accessory (hides Dock icon, prevents space switching)
+            let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
+            let policy: i64 = 1; // NSApplicationActivationPolicyAccessory
+            let _: bool = msg_send![ns_app, setActivationPolicy: policy];
+            log::info!("👻 [macOS] Set ActivationPolicy to Accessory (1)");
+
+            let ns_window: id = webview.ns_window() as id;
+            if ns_window.is_null() {
+                log::error!("❌ [macOS] NSWindow is null!");
+                return;
+            }
+            
+            // 2. Set CollectionBehavior: CanJoinAllSpaces = window exists on ALL spaces
+            //    This means wherever you are, the window is already there
+            //    - CanJoinAllSpaces: Window visible on all desktops
+            //    - FullScreenAuxiliary: Appears over fullscreen apps
+            //    - IgnoresCycle: Skipped in Cmd+Tab
+            //    - Stationary: Doesn't move when switching spaces
+            let behavior = NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces
+                | NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary
+                | NSWindowCollectionBehavior::NSWindowCollectionBehaviorIgnoresCycle
+                | NSWindowCollectionBehavior::NSWindowCollectionBehaviorStationary;
+            
+            NSWindow::setCollectionBehavior_(ns_window, behavior);
+            log::info!("🎯 [macOS] Set CollectionBehavior: CanJoinAllSpaces | FullScreenAuxiliary | IgnoresCycle | Stationary");
+
+            // 3. Set Window Level to StatusBar (higher z-order, above most windows)
+            let status_bar_level: i64 = 25; // NSStatusWindowLevel
+            let _: () = msg_send![ns_window, setLevel: status_bar_level];
+            log::info!("☁️ [macOS] Set WindowLevel to StatusBar (25)");
+            
+            // 4. Detection-free mode: hide from screen recordings/screenshots
+            let _: () = msg_send![ns_window, setSharingType: 0_i64];
+            log::info!("🔒 [macOS] Set SharingType to None (detection-free)");
+            
+            // 5. Ensure it's not hidden
+            let _: () = msg_send![ns_window, setIsVisible: true];
+        }
+    });
+
+    if let Err(e) = result {
+        log::error!("❌ [macOS] Error configuring window: {:?}", e);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn bring_to_front_on_current_space(window: &tauri::WebviewWindow) {
+    log::info!("🚀 [macOS] Bringing overlay to front...");
+
+    let _ = window.with_webview(|webview| {
+        unsafe {
+            let ns_window: id = webview.ns_window() as id;
+            if ns_window.is_null() {
+                log::error!("❌ [macOS] NSWindow is null!");
+                return;
+            }
+            
+            // 1. Ensure high window level (above most windows)
+            let status_bar_level: i64 = 25; // NSStatusWindowLevel
+            let _: () = msg_send![ns_window, setLevel: status_bar_level];
+            
+            // 2. Bring window to front
+            let _: () = msg_send![ns_window, orderFrontRegardless];
+            
+            // 3. Make the window key (accepts keyboard input)
+            let _: () = msg_send![ns_window, makeKeyWindow];
+            
+            // 4. Activate the app to bring window to foreground
+            //    Since visibleOnAllWorkspaces is set in tauri.conf.json,
+            //    this should NOT cause space switching anymore
+            let ns_app: id = msg_send![class!(NSApplication), sharedApplication];
+            let _: () = msg_send![ns_app, activateIgnoringOtherApps: true];
+            
+            log::info!("✅ [macOS] Window activated and ordered front");
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn bring_to_front_on_current_space(_window: &tauri::WebviewWindow) {
+    // No-op on non-macOS platforms
+}
+
+#[cfg(not(target_os = "macos"))]
+
+fn configure_window_behavior(_window: &tauri::WebviewWindow) {
+    // No-op on non-macOS platforms
+}
+
 #[tauri::command]
 fn position_window_top_center(app: tauri::AppHandle) -> Result<(), String> {
   log::info!("position_window_top_center invoked");
@@ -316,6 +426,10 @@ pub fn run() {
         let _ = w.show();
         let _ = w.set_focus();
         let _ = app.emit("panel-should-expand", ());
+        
+        // Set window to be visible on all macOS Spaces/Desktops
+        // Set window to be visible on all macOS Spaces/Desktops
+        configure_window_behavior(&w);
       }
       // Register tray icon with menu
       let show_item = tauri::menu::MenuItemBuilder::with_id("show", "Show Window").build(app)?;
@@ -391,6 +505,10 @@ pub fn run() {
           if let Some(w) = app_handle3.get_webview_window("panel") {
             log::info!("✓ Panel window found, emitting toggle-collapse event");
 
+            // IMPORTANT: Bring window to front on current Space BEFORE emitting event
+            // This is what makes the overlay appear on ANY desktop/space
+            bring_to_front_on_current_space(&w);
+
             // Emit directly to the panel; fall back to window.emit if that fails
             match app_handle3.emit_to("panel", "toggle-collapse", ()) {
               Ok(_) => {
@@ -420,7 +538,7 @@ pub fn run() {
           // Do nothing - this prevents ESC from closing the window
         });
 
-      // macOS all-workspaces will be added later using appropriate APIs
+      // NOTE: Window is visible on all macOS workspaces via visibleOnAllWorkspaces in tauri.conf.json
       Ok(())
     })
     .run(tauri::generate_context!())
@@ -465,5 +583,29 @@ mod tests {
 
     assert_eq!(x, 110);
     assert_eq!(y, 50);
+  }
+
+  #[test]
+  #[cfg(target_os = "macos")]
+  fn verify_macos_collection_behavior_constants() {
+    // Verify that the flags we rely on correspond to the expected macOS bitmasks
+    use cocoa::appkit::NSWindowCollectionBehavior;
+    
+    let can_join_all = NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces.bits();
+    let fullscreen_aux = NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary.bits();
+    let ignore_cycle = NSWindowCollectionBehavior::NSWindowCollectionBehaviorIgnoresCycle.bits();
+    let stationary = NSWindowCollectionBehavior::NSWindowCollectionBehaviorStationary.bits();
+
+    // CanJoinAllSpaces = 1 << 0 = 1
+    assert_eq!(can_join_all, 1, "CanJoinAllSpaces should be 1");
+    
+    // FullScreenAuxiliary = 1 << 8 = 256
+    assert_eq!(fullscreen_aux, 256, "FullScreenAuxiliary should be 256");
+    
+    // IgnoresCycle = 1 << 6 = 64
+    assert_eq!(ignore_cycle, 64, "IgnoresCycle should be 64");
+    
+    // Stationary = 1 << 4 = 16
+    assert_eq!(stationary, 16, "Stationary should be 16");
   }
 }

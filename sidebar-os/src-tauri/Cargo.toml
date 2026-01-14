@@ -27,3 +27,9 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-store = "2"
 window-vibrancy = "0.6"
+
+# macOS native APIs for window management across all Spaces
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc = "0.2"
+libc = "0.2"

@@ -6,6 +6,19 @@
 .env
 .env.*
 
+# Python
+venv/
+__pycache__/
+*.pyc
+*.db
+
+# Cache/System
+.npm-cache/
+Library/
+
+# Swift build
+swift-overlay/.build/
+
 # Node / Vite
 node_modules/
 dist/

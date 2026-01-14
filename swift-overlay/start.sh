@@ -17,6 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SIDEBAR_DIR="$SCRIPT_DIR/../sidebar-os"
 SWIFT_DIR="$SCRIPT_DIR"
 SCREEN_CONTEXT_DIR="$SCRIPT_DIR/../screen-context"
+INVESTMENT_SCOUT_DIR="$SCRIPT_DIR/../investment-scout"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -46,12 +47,14 @@ fi
 # Track PIDs for cleanup
 VITE_PID=""
 SCREEN_PID=""
+INVEST_PID=""
 
 # Cleanup function
 cleanup() {
     echo -e "\n${YELLOW}🧹 Cleaning up...${NC}"
     [ -n "$VITE_PID" ] && kill $VITE_PID 2>/dev/null || true
     [ -n "$SCREEN_PID" ] && kill $SCREEN_PID 2>/dev/null || true
+    [ -n "$INVEST_PID" ] && kill $INVEST_PID 2>/dev/null || true
     echo -e "${GREEN}✅ Shutdown complete${NC}"
 }
 
@@ -75,6 +78,19 @@ if [ -d "venv" ]; then
 else
     echo -e "${RED}⚠️  Screen Context venv not found. Run setup first:${NC}"
     echo -e "   cd $SCREEN_CONTEXT_DIR && python -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+fi
+
+# Start Investment Scout service in background (optional)
+echo -e "${BLUE}💰 Starting Investment Scout service...${NC}"
+cd "$INVESTMENT_SCOUT_DIR"
+if [ -d "venv" ]; then
+    source venv/bin/activate
+    python server.py &
+    INVEST_PID=$!
+    echo -e "${GREEN}✅ Investment Scout service started (port 3003)${NC}"
+else
+    echo -e "${YELLOW}⚠️  Investment Scout venv not found (optional). To setup:${NC}"
+    echo -e "   cd $INVESTMENT_SCOUT_DIR && python -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
 fi
 
 # Wait for services to be ready
